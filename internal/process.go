@@ -299,35 +299,44 @@ func ProcessRPM(pd *ProcessData) {
 
 				for _, patchedFile := range files {
 					srcPath := filepath.Join("SOURCES", patchedFile.NewName)
-					patchSubjectFile, err := w.Filesystem.Open(srcPath)
-					if err != nil {
-						log.Fatalf("could not open patch subject: %v", err)
-					}
-
 					var output bytes.Buffer
-					err = gitdiff.NewApplier(patchSubjectFile).ApplyFile(&output, patchedFile)
-					if err != nil {
-						log.Fatalf("could not apply patch: %v", err)
+					if !patchedFile.IsDelete {
+						patchSubjectFile, err := w.Filesystem.Open(srcPath)
+						if err != nil {
+							log.Fatalf("could not open patch subject: %v", err)
+						}
+
+						err = gitdiff.NewApplier(patchSubjectFile).ApplyFile(&output, patchedFile)
+						if err != nil {
+							log.Fatalf("could not apply patch: %v", err)
+						}
 					}
 
-					err = w.Filesystem.Remove(srcPath)
-					if err != nil {
-						log.Fatalf("could not remove pre-patch file: %v", err)
-					}
+					oldName := filepath.Join("SOURCES", patchedFile.OldName)
+					_ = w.Filesystem.Remove(oldName)
+					_ = w.Filesystem.Remove(srcPath)
 
-					newFile, err := w.Filesystem.Create(srcPath)
-					if err != nil {
-						log.Fatalf("could not create post-patch file: %v", err)
+					if !patchedFile.IsDelete {
+						newFile, err := w.Filesystem.Create(srcPath)
+						if err != nil {
+							log.Fatalf("could not create post-patch file: %v", err)
+						}
+						_, err = newFile.Write(output.Bytes())
+						if err != nil {
+							log.Fatalf("could not write post-patch file: %v", err)
+						}
+						_, err = w.Add(srcPath)
+						if err != nil {
+							log.Fatalf("could not add file %s to git: %v", srcPath, err)
+						}
+						log.Printf("git add %s", srcPath)
+					} else {
+						_, err = w.Remove(oldName)
+						if err != nil {
+							log.Fatalf("could not remove file %s to git: %v", oldName, err)
+						}
+						log.Printf("git rm %s", oldName)
 					}
-					_, err = newFile.Write(output.Bytes())
-					if err != nil {
-						log.Fatalf("could not write post-patch file: %v", err)
-					}
-					_, err = w.Add(srcPath)
-					if err != nil {
-						log.Fatalf("could not add file %s to git: %v", srcPath, err)
-					}
-					log.Printf("git add %s", srcPath)
 				}
 
 				_, err = w.Add(filePath)
