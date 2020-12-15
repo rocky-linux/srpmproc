@@ -2,6 +2,8 @@ package internal
 
 import (
 	"bytes"
+	"cloud.google.com/go/storage"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -33,6 +35,7 @@ type ProcessData struct {
 	SshKeyLocation string
 	SshUser        string
 	Branch         string
+	Bucket         *storage.BucketHandle
 }
 
 type specFileData struct {
@@ -118,20 +121,14 @@ func ProcessRPM(pd *ProcessData) {
 			log.Fatalln(err)
 		}
 
-		// set spec file name
-		if filepath.Ext(hdr.Name) == ".spec" {
-			var err error
-			specBts, err = ioutil.ReadAll(r)
-			if err != nil {
-				log.Fatalf("could not read spec: %v", err)
-			}
-		}
-
 		bts, err := ioutil.ReadAll(r)
 		if err != nil {
 			log.Fatalf("could not copy file to virtual filesystem: %v", err)
 		}
 		fileWrites[hdr.Name] = bts
+		if filepath.Ext(hdr.Name) == ".spec" {
+			specBts = bts
+		}
 	}
 
 	w, err := repo.Worktree()
@@ -298,7 +295,10 @@ func ProcessRPM(pd *ProcessData) {
 				}
 
 				for _, patchedFile := range files {
-					srcPath := filepath.Join("SOURCES", patchedFile.NewName)
+					srcPath := patchedFile.NewName
+					if !strings.HasPrefix(srcPath, "SPECS") {
+						srcPath = filepath.Join("SOURCES", patchedFile.NewName)
+					}
 					var output bytes.Buffer
 					if !patchedFile.IsDelete {
 						patchSubjectFile, err := w.Filesystem.Open(srcPath)
@@ -364,6 +364,20 @@ func ProcessRPM(pd *ProcessData) {
 		if err != nil {
 			log.Fatalf("could not read the whole of ignored source file: %v", err)
 		}
+
+		ctx := context.Background()
+		gcsPath := fmt.Sprintf("%s-%s/%s", rpmFile.Name(), pd.Branch, source)
+		obj := pd.Bucket.Object(gcsPath)
+		w := obj.NewWriter(ctx)
+		_, err = w.Write(sourceFileBts)
+		if err != nil {
+			log.Fatalf("could not write tarball to gcs: %v", err)
+		}
+		// Close, just like writing a file.
+		if err := w.Close(); err != nil {
+			log.Fatalf("could not close gcs writer to source %s: %v", source, err)
+		}
+		log.Printf("wrote %s to gcs", gcsPath)
 
 		checksum := sha1.Sum(sourceFileBts)
 		checksumLine := fmt.Sprintf("%s %s\n", hex.EncodeToString(checksum[:]), sourcePath)
