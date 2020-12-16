@@ -287,6 +287,10 @@ func ProcessRPM(pd *ProcessData) {
 						if err != nil {
 							log.Fatalf("could not create new file: %v", err)
 						}
+						err = gitdiff.NewApplier(newFile).ApplyFile(&output, patchedFile)
+						if err != nil {
+							log.Fatalf("could not apply patch: %v", err)
+						}
 						_, err = newFile.Write(output.Bytes())
 						if err != nil {
 							log.Fatalf("could not write post-patch file: %v", err)
