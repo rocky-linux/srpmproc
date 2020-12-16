@@ -24,7 +24,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -38,10 +37,6 @@ type ProcessData struct {
 	Bucket         *storage.BucketHandle
 }
 
-type specFileData struct {
-	SourcesToIgnore []string
-}
-
 func strContains(a []string, b string) bool {
 	for _, val := range a {
 		if val == b {
@@ -50,38 +45,6 @@ func strContains(a []string, b string) bool {
 	}
 
 	return false
-}
-
-func parseSpecFile(f []byte, orderedSourceFiles []string) *specFileData {
-	spec := specFileData{
-		SourcesToIgnore: []string{},
-	}
-
-	for _, line := range strings.Split(string(f), "\n") {
-		// no need to run through all else ifs
-		if strings.HasPrefix(line, "%changelog") {
-			break
-		}
-		orderedSrcLen := len(orderedSourceFiles)
-
-		if strings.HasPrefix(line, "Source") {
-			source := strings.SplitN(strings.TrimSpace(line), ":", 2)
-			sourceUri := source[1]
-			sourceI := strings.Replace(strings.TrimSpace(source[0]), "Source", "", 1)
-			i, err := strconv.Atoi(sourceI)
-			if err != nil {
-				log.Fatalf("could not convert source number: %v", err)
-			}
-
-			// if sourceUri contains :// then it's remote
-			// so ignore this file
-			if strings.Contains(sourceUri, "://") && strings.Contains(sourceUri, ".tar") {
-				spec.SourcesToIgnore = append(spec.SourcesToIgnore, orderedSourceFiles[orderedSrcLen-1-i])
-			}
-		}
-	}
-
-	return &spec
 }
 
 // ProcessRPM checks the RPM specs and discards any remote files
@@ -104,9 +67,6 @@ func ProcessRPM(pd *ProcessData) {
 		log.Fatalf("could not init git repo: %v", err)
 	}
 
-	// this will be set later
-	var specBts []byte
-
 	// read the rpm in cpio format
 	buf := bytes.NewReader(cpioBytes)
 	r := cpio.NewReader(buf)
@@ -126,9 +86,6 @@ func ProcessRPM(pd *ProcessData) {
 			log.Fatalf("could not copy file to virtual filesystem: %v", err)
 		}
 		fileWrites[hdr.Name] = bts
-		if filepath.Ext(hdr.Name) == ".spec" {
-			specBts = bts
-		}
 	}
 
 	w, err := repo.Worktree()
@@ -155,8 +112,12 @@ func ProcessRPM(pd *ProcessData) {
 		log.Fatalf("could not read package, invalid?: %v", err)
 	}
 
-	// read spec and remove remote files
-	spec := parseSpecFile(specBts, rpmFile.Source())
+	var sourcesToIgnore []string
+	for _, source := range rpmFile.Source() {
+		if strings.Contains(source, ".tar") {
+			sourcesToIgnore = append(sourcesToIgnore, source)
+		}
+	}
 
 	// create a new remote
 	remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, rpmFile.Name())
@@ -220,9 +181,16 @@ func ProcessRPM(pd *ProcessData) {
 			newPath = filepath.Join("SOURCES", fileName)
 		}
 
+		mode := os.FileMode(0666)
+		for _, file := range rpmFile.Files() {
+			if file.Name() == fileName {
+				mode = file.Mode()
+			}
+		}
+
 		// add the file to the virtual filesystem
 		// we will move it to correct destination later
-		f, err := w.Filesystem.Create(newPath)
+		f, err := w.Filesystem.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode)
 		if err != nil {
 			log.Fatalf("could not create file %s: %v", fileName, err)
 		}
@@ -235,11 +203,9 @@ func ProcessRPM(pd *ProcessData) {
 		_ = f.Close()
 
 		// don't add ignored file to git
-		if strContains(spec.SourcesToIgnore, fileName) {
+		if strContains(sourcesToIgnore, fileName) {
 			continue
 		}
-
-		log.Printf("git add %s", newPath)
 
 		_, err = w.Add(newPath)
 		if err != nil {
@@ -252,7 +218,7 @@ func ProcessRPM(pd *ProcessData) {
 	if err != nil {
 		log.Fatalf("could not create .gitignore: %v", err)
 	}
-	for _, ignore := range spec.SourcesToIgnore {
+	for _, ignore := range sourcesToIgnore {
 		line := fmt.Sprintf("SOURCES/%s\n", ignore)
 		_, err := gitIgnore.Write([]byte(line))
 		if err != nil {
@@ -354,7 +320,7 @@ func ProcessRPM(pd *ProcessData) {
 	if err != nil {
 		log.Fatalf("could not create metadata file: %v", err)
 	}
-	for _, source := range spec.SourcesToIgnore {
+	for _, source := range sourcesToIgnore {
 		sourcePath := "SOURCES/" + source
 		sourceFile, err := w.Filesystem.Open(sourcePath)
 		if err != nil {
