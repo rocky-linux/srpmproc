@@ -266,7 +266,7 @@ func ProcessRPM(pd *ProcessData) {
 						srcPath = filepath.Join("SOURCES", patchedFile.NewName)
 					}
 					var output bytes.Buffer
-					if !patchedFile.IsDelete {
+					if !patchedFile.IsDelete && !patchedFile.IsNew {
 						patchSubjectFile, err := w.Filesystem.Open(srcPath)
 						if err != nil {
 							log.Fatalf("could not open patch subject: %v", err)
@@ -282,7 +282,21 @@ func ProcessRPM(pd *ProcessData) {
 					_ = w.Filesystem.Remove(oldName)
 					_ = w.Filesystem.Remove(srcPath)
 
-					if !patchedFile.IsDelete {
+					if patchedFile.IsNew {
+						newFile, err := w.Filesystem.Create(srcPath)
+						if err != nil {
+							log.Fatalf("could not create new file: %v", err)
+						}
+						_, err = newFile.Write(output.Bytes())
+						if err != nil {
+							log.Fatalf("could not write post-patch file: %v", err)
+						}
+						_, err = w.Add(srcPath)
+						if err != nil {
+							log.Fatalf("could not add file %s to git: %v", srcPath, err)
+						}
+						log.Printf("git add %s", srcPath)
+					} else if !patchedFile.IsDelete {
 						newFile, err := w.Filesystem.Create(srcPath)
 						if err != nil {
 							log.Fatalf("could not create post-patch file: %v", err)
