@@ -29,12 +29,14 @@ import (
 )
 
 type ProcessData struct {
-	RpmLocation    string
-	UpstreamPrefix string
-	SshKeyLocation string
-	SshUser        string
-	Branch         string
-	Bucket         *storage.BucketHandle
+	RpmLocation       string
+	UpstreamPrefix    string
+	SshKeyLocation    string
+	SshUser           string
+	Branch            string
+	Bucket            *storage.BucketHandle
+	GitCommitterName  string
+	GitCommitterEmail string
 }
 
 func strContains(a []string, b string) bool {
@@ -401,8 +403,8 @@ func ProcessRPM(pd *ProcessData) {
 	// create import commit
 	commit, err := w.Commit("import "+filepath.Base(pd.RpmLocation), &git.CommitOptions{
 		Author: &object.Signature{
-			Name:  "Mustafa Gezen",
-			Email: "mustafa@bycrates.com",
+			Name:  pd.GitCommitterName,
+			Email: pd.GitCommitterEmail,
 			When:  time.Now(),
 		},
 		Parents: hashes,

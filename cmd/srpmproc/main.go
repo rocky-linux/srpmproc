@@ -17,7 +17,8 @@ var (
 	upstreamPrefix    string
 	branch            string
 	gcsBucket         string
-	debrandedTarballs []string
+	gitCommitterName  string
+	gitCommitterEmail string
 )
 
 var root = &cobra.Command{
@@ -40,12 +41,14 @@ func mn(_ *cobra.Command, _ []string) {
 	}
 
 	internal.ProcessRPM(&internal.ProcessData{
-		RpmLocation:    sourceRpmLocation,
-		UpstreamPrefix: upstreamPrefix,
-		SshKeyLocation: sshKeyLocation,
-		SshUser:        sshUser,
-		Branch:         branch,
-		Bucket:         client.Bucket(gcsBucket),
+		RpmLocation:       sourceRpmLocation,
+		UpstreamPrefix:    upstreamPrefix,
+		SshKeyLocation:    sshKeyLocation,
+		SshUser:           sshUser,
+		Branch:            branch,
+		Bucket:            client.Bucket(gcsBucket),
+		GitCommitterName:  gitCommitterName,
+		GitCommitterEmail: gitCommitterEmail,
 	})
 }
 
@@ -58,10 +61,11 @@ func main() {
 	_ = root.MarkFlagRequired("branch")
 	root.Flags().StringVar(&gcsBucket, "gcs-bucket", "", "Bucket to use as blob storage")
 	_ = root.MarkFlagRequired("gcs-bucket")
+	root.Flags().StringVar(&gitCommitterName, "git-committer-name", "distrobuild-bot", "Name of committer")
+	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "mustafa+distrobuild@bycrates.com", "Email of committer")
 
-	root.Flags().StringVar(&sshKeyLocation, "ssh-key-location", "", "Location of the SSH key to use to authenticate against upstream (Optional)")
-	root.Flags().StringVar(&sshUser, "ssh-user", "git", "SSH User (Optional, default git)")
-	root.Flags().StringArrayVar(&debrandedTarballs, "debranded-tarball", []string{}, "GCS urls to debranded tarballs (stage 2) (Optional)")
+	root.Flags().StringVar(&sshKeyLocation, "ssh-key-location", "", "Location of the SSH key to use to authenticate against upstream")
+	root.Flags().StringVar(&sshUser, "ssh-user", "git", "SSH User")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
