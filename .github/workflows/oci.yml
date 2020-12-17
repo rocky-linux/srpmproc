@@ -10,7 +10,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Login to Docker Hub
-      run: docker login --username mstg --pasword ${{secrets.DOCKER_SECRET}}
+      run: docker login --username mstg --password ${{secrets.DOCKER_SECRET}}
     - name: Get the version
       run: echo ::set-output name=SOURCE_TAG::${GITHUB_REF#refs/tags/}
     - name: Build the Docker image
