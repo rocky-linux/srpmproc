@@ -59,7 +59,7 @@ func ignoredContains(a []*ignoredSource, b string) bool {
 
 // check if content and checksum matches
 // returns the hash type if success else nil
-func compareHash(content []byte, checksum string) hash.Hash {
+func CompareHash(content []byte, checksum string) hash.Hash {
 	var hashType hash.Hash
 
 	switch len(checksum) {

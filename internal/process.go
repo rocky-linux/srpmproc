@@ -154,21 +154,21 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not read the whole of ignored source file: %v", err)
 			}
 
-			path := fmt.Sprintf("%s-%s/%s", rpmFile.Name(), md.pushBranch, source.name)
-			pd.BlobStorage.Write(path, sourceFileBts)
-			log.Printf("wrote %s to blob storage", path)
-
 			source.hashFunction.Reset()
 			_, err = source.hashFunction.Write(sourceFileBts)
 			if err != nil {
 				log.Fatalf("could not write bytes to hash function: %v", err)
 			}
-			checksum := source.hashFunction.Sum(nil)
-			checksumLine := fmt.Sprintf("%s %s\n", hex.EncodeToString(checksum), sourcePath)
+			checksum := hex.EncodeToString(source.hashFunction.Sum(nil))
+			checksumLine := fmt.Sprintf("%s %s\n", checksum, sourcePath)
 			_, err = metadata.Write([]byte(checksumLine))
 			if err != nil {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
+
+			path := fmt.Sprintf("%s-%s/%s", rpmFile.Name(), md.pushBranch, checksum)
+			pd.BlobStorage.Write(path, sourceFileBts)
+			log.Printf("wrote %s to blob storage", path)
 		}
 
 		_, err = w.Add(metadataFile)
