@@ -87,6 +87,7 @@ func CompareHash(content []byte, checksum string) hash.Hash {
 
 	calculated := hex.EncodeToString(hashType.Sum(nil))
 	if calculated != checksum {
+		log.Printf("wanted checksum %s, but got %s", checksum, calculated)
 		return nil
 	}
 

@@ -166,7 +166,7 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			path := fmt.Sprintf("%s-%s/%s", rpmFile.Name(), md.pushBranch, checksum)
+			path := fmt.Sprintf("%s/%s/%s", rpmFile.Name(), md.pushBranch, checksum)
 			pd.BlobStorage.Write(path, sourceFileBts)
 			log.Printf("wrote %s to blob storage", path)
 		}
