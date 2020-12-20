@@ -135,7 +135,7 @@ func ProcessRPM(pd *ProcessData) {
 		md.repo = repo
 		md.worktree = w
 
-		executePatches(w)
+		executePatches(pd, md)
 
 		// get ignored files hash and add to .{name}.metadata
 		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())

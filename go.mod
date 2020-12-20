@@ -10,5 +10,7 @@ require (
 	github.com/cavaliercoder/go-rpm v0.0.0-20200122174316-8cb9fd9c31a8
 	github.com/go-git/go-billy/v5 v5.0.0
 	github.com/go-git/go-git/v5 v5.2.0
+	github.com/golang/protobuf v1.4.2
 	github.com/spf13/cobra v1.1.1
+	google.golang.org/protobuf v1.25.0
 )

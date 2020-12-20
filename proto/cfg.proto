@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option go_package = "github.com/mstg/srpmproc/pb;srpmprocpb";
+
+package srpmproc;
+
+// Replace directive replaces literal files with other files.
+// Replacing content can either be inline or in the same patch-tree.
+message Replace {
+  // required - replaced file
+  string file = 1;
+
+  oneof replacing {
+    // replace with in-tree file
+    string with_file = 2;
+
+    // replace with inline content
+    string with_inline = 3;
+  }
+}
+
+message Cfg {
+  repeated Replace replace = 1;
+}
