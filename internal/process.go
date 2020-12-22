@@ -15,6 +15,7 @@ import (
 	"hash"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -36,6 +37,7 @@ type ProcessData struct {
 	Importer          ImportMode
 	BlobStorage       blob.Storage
 	NoDupMode         bool
+	ModuleMode        bool
 }
 
 type ignoredSource struct {
@@ -64,6 +66,11 @@ type modeData struct {
 func ProcessRPM(pd *ProcessData) {
 	md := pd.Importer.RetrieveSource(pd)
 
+	remotePrefix := "dist"
+	if pd.ModuleMode {
+		remotePrefix = "modules"
+	}
+
 	// if no-dup-mode is enabled then skip already imported versions
 	var tagIgnoreList []string
 	if pd.NoDupMode {
@@ -71,7 +78,7 @@ func ProcessRPM(pd *ProcessData) {
 		if err != nil {
 			log.Fatalf("could not init git repo: %v", err)
 		}
-		remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, md.rpmFile.Name())
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, md.rpmFile.Name())
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 
 		remote, err := repo.CreateRemote(&config.RemoteConfig{
@@ -87,7 +94,7 @@ func ProcessRPM(pd *ProcessData) {
 			Auth: pd.Authenticator,
 		})
 		if err != nil {
-            log.Println("ignoring no-dup-mode")
+			log.Println("ignoring no-dup-mode")
 		} else {
 			for _, ref := range list {
 				if !strings.HasPrefix(string(ref.Name()), "refs/tags/imports") {
@@ -118,11 +125,24 @@ func ProcessRPM(pd *ProcessData) {
 			log.Fatalf("could not get dist worktree: %v", err)
 		}
 
+		var matchString string
 		if !tagImportRegex.MatchString(md.tagBranch) {
-			log.Fatal("import tag invalid")
+			if pd.ModuleMode {
+				prefix := fmt.Sprintf("refs/heads/c%d", pd.Version)
+				if strings.HasPrefix(md.tagBranch, prefix) {
+					replace := strings.Replace(md.tagBranch, "refs/heads/", "", 1)
+					matchString = fmt.Sprintf("refs/tags/imports/%s/%s", replace, filepath.Base(pd.RpmLocation))
+					log.Printf("using match string: %s", matchString)
+				}
+			}
+			if !tagImportRegex.MatchString(matchString) {
+				log.Fatal("import tag invalid")
+			}
+		} else {
+			matchString = md.tagBranch
 		}
 
-		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
+		match := tagImportRegex.FindStringSubmatch(matchString)
 		md.pushBranch = "rocky" + strings.TrimPrefix(match[2], "c")
 		newTag := "imports/rocky" + strings.TrimPrefix(match[1], "imports/c")
 
@@ -138,7 +158,7 @@ func ProcessRPM(pd *ProcessData) {
 		}
 
 		// create a new remote
-		remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, rpmFile.Name())
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, rpmFile.Name())
 		log.Printf("using remote: %s", remoteUrl)
 		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.pushBranch, md.pushBranch))
 		log.Printf("using refspec: %s", refspec)
@@ -182,7 +202,11 @@ func ProcessRPM(pd *ProcessData) {
 		md.repo = repo
 		md.worktree = w
 
-		executePatches(pd, md)
+		if pd.ModuleMode {
+			patchModuleYaml(pd, md)
+		} else {
+			executePatchesRpm(pd, md)
+		}
 
 		// get ignored files hash and add to .{name}.metadata
 		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())
@@ -213,7 +237,7 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			path := fmt.Sprintf("%s/%s/%s", rpmFile.Name(), md.pushBranch, checksum)
+			path := fmt.Sprintf("%s/%s", rpmFile.Name(), checksum)
 			pd.BlobStorage.Write(path, sourceFileBts)
 			log.Printf("wrote %s to blob storage", path)
 		}
@@ -225,9 +249,12 @@ func ProcessRPM(pd *ProcessData) {
 
 		lastFilesToAdd := []string{".gitignore", "SPECS"}
 		for _, f := range lastFilesToAdd {
-			_, err := w.Add(f)
-			if err != nil {
-				log.Fatalf("could not add metadata file: %v", err)
+			_, err := w.Filesystem.Stat(f)
+			if err == nil {
+				_, err := w.Add(f)
+				if err != nil {
+					log.Fatalf("could not add %s: %v", f, err)
+				}
 			}
 		}
 

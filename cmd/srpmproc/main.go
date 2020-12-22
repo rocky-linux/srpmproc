@@ -27,6 +27,7 @@ var (
 	modulePrefix      string
 	rpmPrefix         string
 	noDupMode         bool
+	moduleMode        bool
 )
 
 var root = &cobra.Command{
@@ -58,7 +59,11 @@ func mn(_ *cobra.Command, _ []string) {
 		sourceRpmLocation = strings.TrimPrefix(sourceRpm, "file://")
 		importer = &internal.SrpmMode{}
 	} else {
-		sourceRpmLocation = fmt.Sprintf("%s/%s", rpmPrefix, sourceRpm)
+		if moduleMode {
+			sourceRpmLocation = fmt.Sprintf("%s/%s", modulePrefix, sourceRpm)
+		} else {
+			sourceRpmLocation = fmt.Sprintf("%s/%s", rpmPrefix, sourceRpm)
+		}
 		importer = &internal.GitMode{}
 	}
 
@@ -89,6 +94,7 @@ func mn(_ *cobra.Command, _ []string) {
 		ModulePrefix:      modulePrefix,
 		Authenticator:     authenticator,
 		NoDupMode:         noDupMode,
+		ModuleMode:        moduleMode,
 	})
 }
 
@@ -109,6 +115,7 @@ func main() {
 	root.Flags().StringVar(&modulePrefix, "module-prefix", "https://git.centos.org/modules", "Where to retrieve modules if exists. Only used when source-rpm is a git repo")
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
 	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
+	root.Flags().BoolVar(&moduleMode, "module-mode", false, "If enabled, imports a module instead of a package")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)

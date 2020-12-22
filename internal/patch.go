@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/mstg/srpmproc/internal/directives"
+	"github.com/mstg/srpmproc/modulemd"
 	srpmprocpb "github.com/mstg/srpmproc/pb"
 	"google.golang.org/protobuf/encoding/prototext"
 	"io/ioutil"
@@ -165,7 +166,7 @@ func applyPatches(patchTree *git.Worktree, pushTree *git.Worktree) {
 	}
 }
 
-func executePatches(pd *ProcessData, md *modeData) {
+func executePatchesRpm(pd *ProcessData, md *modeData) {
 	// fetch patch repository
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
@@ -223,5 +224,97 @@ func executePatches(pd *ProcessData, md *modeData) {
 		} else {
 			log.Println("info: no branch specific patches found")
 		}
+	}
+}
+
+func getTipStream(pd *ProcessData, module string, pushBranch string) string {
+	repo, err := git.Init(memory.NewStorage(), memfs.New())
+	if err != nil {
+		log.Fatalf("could not init git repo: %v", err)
+	}
+
+	remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, module)
+	refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
+	remote, err := repo.CreateRemote(&config.RemoteConfig{
+		Name:  "origin",
+		URLs:  []string{remoteUrl},
+		Fetch: []config.RefSpec{refspec},
+	})
+	if err != nil {
+		log.Fatalf("could not create remote: %v", err)
+	}
+
+	list, err := remote.List(&git.ListOptions{
+		Auth: pd.Authenticator,
+	})
+	if err != nil {
+		log.Fatalf("could not get rpm refs. import the rpm before the module: %v", err)
+	}
+
+	var tipHash string
+
+	for _, ref := range list {
+		prefix := fmt.Sprintf("refs/heads/%s", pushBranch)
+		if strings.HasPrefix(ref.Name().String(), prefix) {
+			tipHash = ref.Hash().String()
+		}
+	}
+
+	if tipHash == "" {
+		log.Fatal("could not find tip hash")
+	}
+
+	return tipHash
+}
+
+func patchModuleYaml(pd *ProcessData, md *modeData) {
+	// special case for platform.yaml
+	_, err := md.worktree.Filesystem.Open("platform.yaml")
+	if err == nil {
+		return
+	}
+
+	mdTxtPath := "SOURCES/modulemd.src.txt"
+	f, err := md.worktree.Filesystem.Open(mdTxtPath)
+	if err != nil {
+		log.Fatalf("could not open modulemd file: %v", err)
+	}
+
+	content, err := ioutil.ReadAll(f)
+	if err != nil {
+		log.Fatalf("could not read modulemd file: %v", err)
+	}
+
+	module, err := modulemd.Parse(content)
+	if err != nil {
+		log.Fatalf("could not parse modulemd file: %v", err)
+	}
+
+	var tipHash string
+	name := md.rpmFile.Name()
+	module.Data.Name = name
+	ref := module.Data.Components.Rpms[name].Ref
+	if strings.HasPrefix(ref, "stream-") {
+		module.Data.Components.Rpms[name].Ref = md.pushBranch
+		tipHash = getTipStream(pd, name, md.pushBranch)
+	} else {
+		log.Fatal("could not recognize modulemd file, no stream- ref?")
+	}
+
+	err = module.Marshal(md.worktree.Filesystem, mdTxtPath)
+	if err != nil {
+		log.Fatalf("could not marshal modulemd: %v", err)
+	}
+
+	module.Data.Components.Rpms[name].Ref = tipHash
+	rootModule := fmt.Sprintf("%s.yaml", name)
+	err = module.Marshal(md.worktree.Filesystem, rootModule)
+	if err != nil {
+		log.Fatalf("could not marshal root modulemd: %v", err)
+	}
+
+	_, err = md.worktree.Add(rootModule)
+	if err != nil {
+		log.Fatalf("could not add root modulemd: %v", err)
 	}
 }

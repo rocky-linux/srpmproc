@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -58,13 +57,6 @@ func runFetch(_ *cobra.Command, _ []string) {
 		log.Fatalf("could not read metadata file: %v", err)
 	}
 
-	cmd := exec.Command("git", "branch", "--show-current")
-	branchByte, err := cmd.Output()
-	if err != nil {
-		log.Fatalf("could not get branch: %v", err)
-	}
-	branch := strings.TrimSuffix(string(branchByte), "\n")
-
 	client := &http.Client{
 		Transport: &http.Transport{
 			DisableCompression: false,
@@ -80,7 +72,7 @@ func runFetch(_ *cobra.Command, _ []string) {
 		hash := lineInfo[0]
 		path := lineInfo[1]
 
-		url := fmt.Sprintf("%s/%s/%s/%s", cdnUrl, name, branch, hash)
+		url := fmt.Sprintf("%s/%s/%s", cdnUrl, name, hash)
 		log.Printf("downloading %s", url)
 
 		req, err := http.NewRequest("GET", url, nil)

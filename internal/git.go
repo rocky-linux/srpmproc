@@ -52,6 +52,17 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 			branches = append(branches, name)
 		}
 	}
+
+	// no tags? fetch branches
+	if len(branches) == 0 {
+		for _, ref := range list {
+			name := string(ref.Name())
+			prefix := fmt.Sprintf("refs/heads/c%d", pd.Version)
+			if strings.HasPrefix(name, prefix) {
+				branches = append(branches, name)
+			}
+		}
+	}
 	sort.Strings(branches)
 
 	return &modeData{
@@ -69,8 +80,17 @@ func (g *GitMode) WriteSource(md *modeData) {
 		log.Fatalf("could not get upstream remote: %v", err)
 	}
 
-	match := tagImportRegex.FindStringSubmatch(md.tagBranch)
-	refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", match[2], md.tagBranch))
+	var refspec config.RefSpec
+	var branchName string
+
+	if strings.HasPrefix(md.tagBranch, "refs/heads") {
+		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.tagBranch, md.tagBranch))
+		branchName = strings.TrimPrefix(md.tagBranch, "refs/heads/")
+	} else {
+		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
+		branchName = match[2]
+		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.tagBranch))
+	}
 	log.Printf("checking out upstream refspec %s", refspec)
 	err = remote.Fetch(&git.FetchOptions{
 		RemoteName: "upstream",
@@ -97,7 +117,8 @@ func (g *GitMode) WriteSource(md *modeData) {
 
 	metadataFile, err := md.worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.rpmFile.Name()))
 	if err != nil {
-		log.Fatalf("could not open metadata file: %v", err)
+		log.Printf("warn: could not open metadata file, so skipping: %v", err)
+		return
 	}
 
 	fileBytes, err := ioutil.ReadAll(metadataFile)
@@ -120,7 +141,7 @@ func (g *GitMode) WriteSource(md *modeData) {
 		hash := strings.TrimSpace(lineInfo[0])
 		path := strings.TrimSpace(lineInfo[1])
 
-		url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), match[2], hash)
+		url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), branchName, hash)
 		log.Printf("downloading %s", url)
 
 		req, err := http.NewRequest("GET", url, nil)
@@ -181,6 +202,10 @@ func (g *GitMode) PostProcess(md *modeData) {
 }
 
 func (g *GitMode) ImportName(_ *ProcessData, md *modeData) string {
-	match := tagImportRegex.FindStringSubmatch(md.tagBranch)
-	return match[3]
+	if tagImportRegex.MatchString(md.tagBranch) {
+		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
+		return match[3]
+	}
+
+	return strings.TrimPrefix(md.tagBranch, "refs/heads/")
 }
