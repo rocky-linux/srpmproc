@@ -87,14 +87,14 @@ func ProcessRPM(pd *ProcessData) {
 			Auth: pd.Authenticator,
 		})
 		if err != nil {
-			log.Fatalf("could not list remote: %v", err)
-		}
-
-		for _, ref := range list {
-			if !strings.HasPrefix(string(ref.Name()), "refs/tags/imports") {
-				continue
+            log.Println("ignoring no-dup-mode")
+		} else {
+			for _, ref := range list {
+				if !strings.HasPrefix(string(ref.Name()), "refs/tags/imports") {
+					continue
+				}
+				tagIgnoreList = append(tagIgnoreList, string(ref.Name()))
 			}
-			tagIgnoreList = append(tagIgnoreList, string(ref.Name()))
 		}
 	}
 
