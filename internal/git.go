@@ -71,6 +71,7 @@ func (g *GitMode) WriteSource(md *modeData) {
 
 	match := tagImportRegex.FindStringSubmatch(md.tagBranch)
 	refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", match[2], md.tagBranch))
+	log.Printf("checking out upstream refspec %s", refspec)
 	err = remote.Fetch(&git.FetchOptions{
 		RemoteName: "upstream",
 		RefSpecs:   []config.RefSpec{refspec},
@@ -115,9 +116,9 @@ func (g *GitMode) WriteSource(md *modeData) {
 			continue
 		}
 
-		lineInfo := strings.Split(line, " ")
-		hash := lineInfo[0]
-		path := lineInfo[1]
+		lineInfo := strings.SplitN(line, " ", 2)
+		hash := strings.TrimSpace(lineInfo[0])
+		path := strings.TrimSpace(lineInfo[1])
 
 		url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), match[2], hash)
 		log.Printf("downloading %s", url)

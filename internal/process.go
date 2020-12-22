@@ -35,6 +35,7 @@ type ProcessData struct {
 	Authenticator     *ssh.PublicKeys
 	Importer          ImportMode
 	BlobStorage       blob.Storage
+	NoDupMode         bool
 }
 
 type ignoredSource struct {
@@ -63,6 +64,40 @@ type modeData struct {
 func ProcessRPM(pd *ProcessData) {
 	md := pd.Importer.RetrieveSource(pd)
 
+	// if no-dup-mode is enabled then skip already imported versions
+	var tagIgnoreList []string
+	if pd.NoDupMode {
+		repo, err := git.Init(memory.NewStorage(), memfs.New())
+		if err != nil {
+			log.Fatalf("could not init git repo: %v", err)
+		}
+		remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, md.rpmFile.Name())
+		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
+
+		remote, err := repo.CreateRemote(&config.RemoteConfig{
+			Name:  "origin",
+			URLs:  []string{remoteUrl},
+			Fetch: []config.RefSpec{refspec},
+		})
+		if err != nil {
+			log.Fatalf("could not create remote: %v", err)
+		}
+
+		list, err := remote.List(&git.ListOptions{
+			Auth: pd.Authenticator,
+		})
+		if err != nil {
+			log.Fatalf("could not list remote: %v", err)
+		}
+
+		for _, ref := range list {
+			if !strings.HasPrefix(string(ref.Name()), "refs/tags/imports") {
+				continue
+			}
+			tagIgnoreList = append(tagIgnoreList, string(ref.Name()))
+		}
+	}
+
 	sourceRepo := *md.repo
 	sourceWorktree := *md.worktree
 
@@ -89,6 +124,18 @@ func ProcessRPM(pd *ProcessData) {
 
 		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
 		md.pushBranch = "rocky" + strings.TrimPrefix(match[2], "c")
+		newTag := "imports/rocky" + strings.TrimPrefix(match[1], "imports/c")
+
+		shouldContinue := true
+		for _, ignoredTag := range tagIgnoreList {
+			if ignoredTag == "refs/tags/"+newTag {
+				log.Printf("skipping %s", ignoredTag)
+				shouldContinue = false
+			}
+		}
+		if !shouldContinue {
+			continue
+		}
 
 		// create a new remote
 		remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, rpmFile.Name())
@@ -225,7 +272,6 @@ func ProcessRPM(pd *ProcessData) {
 
 		log.Printf("committed:\n%s", obj.String())
 
-		newTag := "imports/rocky" + strings.TrimPrefix(match[1], "imports/c")
 		_, err = repo.CreateTag(newTag, commit, &git.CreateTagOptions{
 			Tagger: &object.Signature{
 				Name:  pd.GitCommitterName,

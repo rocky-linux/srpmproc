@@ -26,6 +26,7 @@ var (
 	gitCommitterEmail string
 	modulePrefix      string
 	rpmPrefix         string
+	noDupMode         bool
 )
 
 var root = &cobra.Command{
@@ -87,6 +88,7 @@ func mn(_ *cobra.Command, _ []string) {
 		GitCommitterEmail: gitCommitterEmail,
 		ModulePrefix:      modulePrefix,
 		Authenticator:     authenticator,
+		NoDupMode:         noDupMode,
 	})
 }
 
@@ -106,6 +108,7 @@ func main() {
 	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "mustafa+distrobuild@bycrates.com", "Email of committer")
 	root.Flags().StringVar(&modulePrefix, "module-prefix", "https://git.centos.org/modules", "Where to retrieve modules if exists. Only used when source-rpm is a git repo")
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
+	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
