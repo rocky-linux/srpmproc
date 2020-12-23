@@ -208,6 +208,8 @@ func ProcessRPM(pd *ProcessData) {
 			executePatchesRpm(pd, md)
 		}
 
+		// already uploaded blobs are skipped
+		var alreadyUploadedBlobs []string
 		// get ignored files hash and add to .{name}.metadata
 		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())
 		metadata, err := w.Filesystem.Create(metadataFile)
@@ -238,8 +240,12 @@ func ProcessRPM(pd *ProcessData) {
 			}
 
 			path := fmt.Sprintf("%s/%s", rpmFile.Name(), checksum)
+			if strContains(alreadyUploadedBlobs, path) {
+				continue
+			}
 			pd.BlobStorage.Write(path, sourceFileBts)
 			log.Printf("wrote %s to blob storage", path)
+			alreadyUploadedBlobs = append(alreadyUploadedBlobs, path)
 		}
 
 		_, err = w.Add(metadataFile)

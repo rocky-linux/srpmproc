@@ -57,6 +57,16 @@ func ignoredContains(a []*ignoredSource, b string) bool {
 	return false
 }
 
+func strContains(a []string, b string) bool {
+	for _, val := range a {
+		if val == b {
+			return true
+		}
+	}
+
+	return false
+}
+
 // check if content and checksum matches
 // returns the hash type if success else nil
 func CompareHash(content []byte, checksum string) hash.Hash {
