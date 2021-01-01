@@ -43,6 +43,7 @@ type ProcessData struct {
 type ignoredSource struct {
 	name         string
 	hashFunction hash.Hash
+	expired      bool
 }
 
 type modeData struct {
@@ -112,7 +113,9 @@ func ProcessRPM(pd *ProcessData) {
 		md.repo = &sourceRepo
 		md.worktree = &sourceWorktree
 		md.tagBranch = branch
-		md.sourcesToIgnore = []*ignoredSource{}
+		for _, source := range md.sourcesToIgnore {
+			source.expired = true
+		}
 
 		rpmFile := md.rpmFile
 		// create new repo for final dist
@@ -217,7 +220,11 @@ func ProcessRPM(pd *ProcessData) {
 			log.Fatalf("could not create metadata file: %v", err)
 		}
 		for _, source := range md.sourcesToIgnore {
-			sourcePath := "SOURCES/" + source.name
+			if source.expired {
+				continue
+			}
+
+			sourcePath := source.name
 			sourceFile, err := w.Filesystem.Open(sourcePath)
 			if err != nil {
 				log.Fatalf("could not open ignored source file %s: %v", sourcePath, err)
@@ -239,7 +246,7 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			path := fmt.Sprintf("%s/%s", rpmFile.Name(), checksum)
+			path := fmt.Sprintf("%s", checksum)
 			if strContains(alreadyUploadedBlobs, path) {
 				continue
 			}

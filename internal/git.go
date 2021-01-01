@@ -175,7 +175,7 @@ func (g *GitMode) WriteSource(md *modeData) {
 		}
 
 		md.sourcesToIgnore = append(md.sourcesToIgnore, &ignoredSource{
-			name:         filepath.Base(path),
+			name:         path,
 			hashFunction: hasher,
 		})
 
@@ -189,9 +189,12 @@ func (g *GitMode) WriteSource(md *modeData) {
 
 func (g *GitMode) PostProcess(md *modeData) {
 	for _, source := range md.sourcesToIgnore {
-		err := md.worktree.Filesystem.Remove(filepath.Join("SOURCES", source.name))
-		if err != nil {
-			log.Fatalf("could not remove dist-git file: %v", err)
+		_, err := md.worktree.Filesystem.Stat(source.name)
+		if err == nil {
+			err := md.worktree.Filesystem.Remove(source.name)
+			if err != nil {
+				log.Fatalf("could not remove dist-git file: %v", err)
+			}
 		}
 	}
 
