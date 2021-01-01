@@ -292,12 +292,27 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 
 	for name, rpm := range module.Data.Components.Rpms {
 		var tipHash string
-		if strings.HasPrefix(rpm.Ref, "stream-") {
-			rpm.Ref = md.pushBranch
-			tipHash = getTipStream(pd, name, md.pushBranch)
+		var pushBranch string
+		split := strings.Split(rpm.Ref, "-")
+		// TODO: maybe point to correct release tag? but refer to latest for now,
+		// we're bootstrapping a new distro for latest RHEL8 anyways. So earlier
+		// versions are not that important
+		if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
+			repString := fmt.Sprintf("rocky%ss-", string(split[4][0]))
+			newString := fmt.Sprintf("rocky%s-", string(split[4][0]))
+			pushBranch = strings.Replace(md.pushBranch, repString, newString, 1)
+		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 2 {
+			pushBranch = md.pushBranch
+		} else if strings.HasPrefix(rpm.Ref, "stream-") {
+			pushBranch = fmt.Sprintf("rocky%s-stream-%s", string(split[3][0]), split[1])
+		} else if strings.HasPrefix(rpm.Ref, "rhel-") {
+			pushBranch = md.pushBranch
 		} else {
-			log.Fatal("could not recognize modulemd file, no stream- ref?")
+			log.Fatal("could not recognize modulemd ref")
 		}
+
+		rpm.Ref = pushBranch
+		tipHash = getTipStream(pd, name, pushBranch)
 
 		err = module.Marshal(md.worktree.Filesystem, mdTxtPath)
 		if err != nil {
