@@ -6,6 +6,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"io/ioutil"
 	"log"
@@ -13,7 +14,27 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
+
+type remoteTarget struct {
+	remote string
+	when   time.Time
+}
+
+type remoteTargetSlice []remoteTarget
+
+func (p remoteTargetSlice) Len() int {
+	return len(p)
+}
+
+func (p remoteTargetSlice) Less(i, j int) bool {
+	return p[i].when.Before(p[j].when)
+}
+
+func (p remoteTargetSlice) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
 
 type GitMode struct{}
 
@@ -38,39 +59,45 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 		log.Fatalf("could not create remote: %v", err)
 	}
 
-	list, err := remote.List(&git.ListOptions{})
+	err = remote.Fetch(&git.FetchOptions{
+		RemoteName: "upstream",
+		RefSpecs:   []config.RefSpec{refspec},
+		Tags:       git.AllTags,
+		Force:      true,
+	})
 	if err != nil {
-		log.Fatalf("could not list remote: %v", err)
+		log.Fatalf("could not fetch upstream: %v", err)
 	}
 
-	var branches []string
+	var branches remoteTargetSlice
 
-	for _, ref := range list {
-		log.Println(ref.String())
-		name := string(ref.Name())
-		if strings.HasPrefix(name, fmt.Sprintf("refs/tags/imports/c%d", pd.Version)) {
-			branches = append(branches, name)
+	tagIter, err := repo.TagObjects()
+	if err != nil {
+		log.Fatalf("could not get tag objects: %v", err)
+	}
+	_ = tagIter.ForEach(func(tag *object.Tag) error {
+		log.Printf("tag: %s", tag.Name)
+		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/c%d", pd.Version)) {
+			branches = append(branches, remoteTarget{
+				remote: fmt.Sprintf("refs/tags/%s", tag.Name),
+				when:   tag.Tagger.When,
+			})
 		}
-	}
+		return nil
+	})
+	sort.Sort(branches)
 
-	// no tags? fetch branches
-	if len(branches) == 0 {
-		for _, ref := range list {
-			name := string(ref.Name())
-			prefix := fmt.Sprintf("refs/heads/c%d", pd.Version)
-			if strings.HasPrefix(name, prefix) {
-				branches = append(branches, name)
-			}
-		}
+	var sortedBranches []string
+	for _, branch := range branches {
+		sortedBranches = append(sortedBranches, branch.remote)
 	}
-	sort.Strings(branches)
 
 	return &modeData{
 		repo:       repo,
 		worktree:   w,
 		rpmFile:    createPackageFile(filepath.Base(pd.RpmLocation)),
 		fileWrites: nil,
-		branches:   branches,
+		branches:   sortedBranches,
 	}
 }
 
