@@ -41,20 +41,8 @@ type ModuleMd struct {
 		} `yaml:"license,omitempty"`
 		Xmd          map[string]interface{} `yaml:"xmd,omitempty"`
 		Dependencies []struct {
-			Buildrequires struct {
-				Platform   []string      `yaml:"platform,omitempty"`
-				Buildtools []string      `yaml:"buildtools,omitempty"`
-				Compatible []string      `yaml:"compatible,omitempty"`
-				Extras     []interface{} `yaml:"extras,omitempty"`
-				Moreextras []string      `yaml:"moreextras,omitempty"`
-			} `yaml:"buildrequires,omitempty,omitempty"`
-			Requires struct {
-				Platform   []string      `yaml:"platform,omitempty"`
-				Compatible []string      `yaml:"compatible,omitempty"`
-				Runtime    []string      `yaml:"runtime,omitempty"`
-				Extras     []interface{} `yaml:"extras,omitempty"`
-				Moreextras []string      `yaml:"moreextras,omitempty"`
-			} `yaml:"requires,omitempty,omitempty"`
+			Buildrequires map[string]interface{} `yaml:"buildrequires,omitempty,omitempty"`
+			Requires      map[string]interface{} `yaml:"requires,omitempty,omitempty"`
 		} `yaml:"dependencies,omitempty"`
 		References struct {
 			Community     string `yaml:"community,omitempty"`
