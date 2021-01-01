@@ -290,24 +290,24 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 		log.Fatalf("could not parse modulemd file: %v", err)
 	}
 
-	var tipHash string
-	name := md.rpmFile.Name()
-	module.Data.Name = name
-	ref := module.Data.Components.Rpms[name].Ref
-	if strings.HasPrefix(ref, "stream-") {
-		module.Data.Components.Rpms[name].Ref = md.pushBranch
-		tipHash = getTipStream(pd, name, md.pushBranch)
-	} else {
-		log.Fatal("could not recognize modulemd file, no stream- ref?")
+	for name, rpm := range module.Data.Components.Rpms {
+		var tipHash string
+		if strings.HasPrefix(rpm.Ref, "stream-") {
+			rpm.Ref = md.pushBranch
+			tipHash = getTipStream(pd, name, md.pushBranch)
+		} else {
+			log.Fatal("could not recognize modulemd file, no stream- ref?")
+		}
+
+		err = module.Marshal(md.worktree.Filesystem, mdTxtPath)
+		if err != nil {
+			log.Fatalf("could not marshal modulemd: %v", err)
+		}
+
+		rpm.Ref = tipHash
 	}
 
-	err = module.Marshal(md.worktree.Filesystem, mdTxtPath)
-	if err != nil {
-		log.Fatalf("could not marshal modulemd: %v", err)
-	}
-
-	module.Data.Components.Rpms[name].Ref = tipHash
-	rootModule := fmt.Sprintf("%s.yaml", name)
+	rootModule := fmt.Sprintf("%s.yaml", md.rpmFile.Name())
 	err = module.Marshal(md.worktree.Filesystem, rootModule)
 	if err != nil {
 		log.Fatalf("could not marshal root modulemd: %v", err)

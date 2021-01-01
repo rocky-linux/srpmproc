@@ -6,43 +6,122 @@ import (
 )
 
 type ModuleMd struct {
-	Document string `yaml:"document"`
-	Version  int    `yaml:"version"`
+	Document string `yaml:"document,omitempty"`
+	Version  int    `yaml:"version,omitempty"`
 	Data     struct {
-		Name        string `yaml:"name"`
-		Stream      string `yaml:"stream"`
-		Summary     string `yaml:"summary"`
-		Description string `yaml:"description"`
-		License     struct {
-			Module []string `yaml:"module"`
-		} `yaml:"license"`
+		Name          string `yaml:"name,omitempty"`
+		Stream        string `yaml:"stream,omitempty"`
+		Version       int64  `yaml:"version,omitempty"`
+		StaticContext bool   `yaml:"static_context,omitempty"`
+		Context       string `yaml:"context,omitempty"`
+		Arch          string `yaml:"arch,omitempty"`
+		Summary       string `yaml:"summary,omitempty"`
+		Description   string `yaml:"description,omitempty"`
+		Servicelevels struct {
+			Rawhide struct {
+				Eol struct {
+				} `yaml:"eol,omitempty"`
+			} `yaml:"rawhide,omitempty"`
+			StableAPI struct {
+				Eol struct {
+				} `yaml:"eol,omitempty"`
+			} `yaml:"stable_api,omitempty"`
+			BugFixes struct {
+				Eol struct {
+				} `yaml:"eol,omitempty"`
+			} `yaml:"bug_fixes,omitempty"`
+			SecurityFixes struct {
+				Eol struct {
+				} `yaml:"eol,omitempty"`
+			} `yaml:"security_fixes,omitempty"`
+		} `yaml:"servicelevels,omitempty"`
+		License struct {
+			Module  []string `yaml:"module,omitempty"`
+			Content []string `yaml:"content,omitempty"`
+		} `yaml:"license,omitempty"`
+		Xmd          map[string]interface{} `yaml:"xmd,omitempty"`
 		Dependencies []struct {
-			BuildRequires struct {
-				Platform []string `yaml:"platform"`
-			} `yaml:"buildrequires"`
+			Buildrequires struct {
+				Platform   []string      `yaml:"platform,omitempty"`
+				Buildtools []string      `yaml:"buildtools,omitempty"`
+				Compatible []string      `yaml:"compatible,omitempty"`
+				Extras     []interface{} `yaml:"extras,omitempty"`
+				Moreextras []string      `yaml:"moreextras,omitempty"`
+			} `yaml:"buildrequires,omitempty,omitempty"`
 			Requires struct {
-				Platform []string `yaml:"platform"`
-			} `yaml:"requires"`
-		} `yaml:"dependencies"`
+				Platform   []string      `yaml:"platform,omitempty"`
+				Compatible []string      `yaml:"compatible,omitempty"`
+				Runtime    []string      `yaml:"runtime,omitempty"`
+				Extras     []interface{} `yaml:"extras,omitempty"`
+				Moreextras []string      `yaml:"moreextras,omitempty"`
+			} `yaml:"requires,omitempty,omitempty"`
+		} `yaml:"dependencies,omitempty"`
 		References struct {
-			Documentation string `yaml:"documentation"`
-			Tracker       string `yaml:"tracker"`
-		} `yaml:"references"`
+			Community     string `yaml:"community,omitempty"`
+			Documentation string `yaml:"documentation,omitempty"`
+			Tracker       string `yaml:"tracker,omitempty"`
+		} `yaml:"references,omitempty"`
 		Profiles struct {
-			Common struct {
-				Rpms []string `yaml:"rpms"`
-			} `yaml:"common"`
-		} `yaml:"profiles"`
+			Container struct {
+				Rpms []string `yaml:"rpms,omitempty"`
+			} `yaml:"container,omitempty"`
+			Minimal struct {
+				Description string   `yaml:"description,omitempty"`
+				Rpms        []string `yaml:"rpms,omitempty"`
+			} `yaml:"minimal,omitempty"`
+			Buildroot struct {
+				Rpms []string `yaml:"rpms,omitempty"`
+			} `yaml:"buildroot,omitempty"`
+			SrpmBuildroot struct {
+				Rpms []string `yaml:"rpms,omitempty"`
+			} `yaml:"srpm-buildroot,omitempty"`
+		} `yaml:"profiles,omitempty"`
 		API struct {
-			Rpms []string `yaml:"rpms"`
-		} `yaml:"api"`
+			Rpms []string `yaml:"rpms,omitempty"`
+		} `yaml:"api,omitempty"`
+		Filter struct {
+			Rpms []string `yaml:"rpms,omitempty"`
+		} `yaml:"filter,omitempty"`
+		Buildopts struct {
+			Rpms struct {
+				Macros    string   `yaml:"macros,omitempty"`
+				Whitelist []string `yaml:"whitelist,omitempty"`
+			} `yaml:"rpms,omitempty"`
+			Arches []string `yaml:"arches,omitempty"`
+		} `yaml:"buildopts,omitempty"`
 		Components struct {
 			Rpms map[string]*struct {
-				Rationale string `yaml:"rationale"`
-				Ref       string `yaml:"ref"`
-			} `yaml:"rpms"`
-		} `yaml:"components"`
-	} `yaml:"data"`
+				Name          string   `yaml:"name,omitempty"`
+				Rationale     string   `yaml:"rationale,omitempty"`
+				Repository    string   `yaml:"repository,omitempty"`
+				Cache         string   `yaml:"cache,omitempty"`
+				Ref           string   `yaml:"ref,omitempty"`
+				Buildonly     bool     `yaml:"buildonly,omitempty"`
+				Buildroot     bool     `yaml:"buildroot,omitempty"`
+				SrpmBuildroot bool     `yaml:"srpm-buildroot,omitempty"`
+				Buildorder    int      `yaml:"buildorder,omitempty"`
+				Arches        []string `yaml:"arches,omitempty"`
+				Multilib      []string `yaml:"multilib,omitempty"`
+			} `yaml:"rpms,omitempty"`
+			Modules map[string]*struct {
+				Rationale  string `yaml:"rationale,omitempty"`
+				Repository string `yaml:"repository,omitempty"`
+				Ref        string `yaml:"ref,omitempty"`
+				Buildorder int    `yaml:"buildorder,omitempty"`
+			} `yaml:"modules,omitempty"`
+		} `yaml:"components,omitempty"`
+		Artifacts struct {
+			Rpms   []string `yaml:"rpms,omitempty"`
+			RpmMap map[string]map[string]*struct {
+				Name    string  `yaml:"name,omitempty"`
+				Epoch   int     `yaml:"epoch,omitempty"`
+				Version float64 `yaml:"version,omitempty"`
+				Release string  `yaml:"release,omitempty"`
+				Arch    string  `yaml:"arch,omitempty"`
+				Nevra   string  `yaml:"nevra,omitempty"`
+			} `yaml:"rpm-map,omitempty"`
+		} `yaml:"artifacts,omitempty"`
+	} `yaml:"data,omitempty"`
 }
 
 func Parse(input []byte) (*ModuleMd, error) {
