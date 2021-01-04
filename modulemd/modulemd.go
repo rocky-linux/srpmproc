@@ -49,20 +49,9 @@ type ModuleMd struct {
 			Documentation string `yaml:"documentation,omitempty"`
 			Tracker       string `yaml:"tracker,omitempty"`
 		} `yaml:"references,omitempty"`
-		Profiles struct {
-			Container struct {
-				Rpms []string `yaml:"rpms,omitempty"`
-			} `yaml:"container,omitempty"`
-			Minimal struct {
-				Description string   `yaml:"description,omitempty"`
-				Rpms        []string `yaml:"rpms,omitempty"`
-			} `yaml:"minimal,omitempty"`
-			Buildroot struct {
-				Rpms []string `yaml:"rpms,omitempty"`
-			} `yaml:"buildroot,omitempty"`
-			SrpmBuildroot struct {
-				Rpms []string `yaml:"rpms,omitempty"`
-			} `yaml:"srpm-buildroot,omitempty"`
+		Profiles map[string]*struct {
+			Description string   `yaml:"description,omitempty"`
+			Rpms        []string `yaml:"rpms,omitempty"`
 		} `yaml:"profiles,omitempty"`
 		API struct {
 			Rpms []string `yaml:"rpms,omitempty"`
