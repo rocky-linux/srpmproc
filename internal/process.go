@@ -21,23 +21,25 @@ import (
 	"time"
 )
 
-var tagImportRegex = regexp.MustCompile("refs/tags/(imports/(.*)/(.*))")
+var tagImportRegex *regexp.Regexp
 
 type ProcessData struct {
-	RpmLocation       string
-	UpstreamPrefix    string
-	SshKeyLocation    string
-	SshUser           string
-	Version           int
-	GitCommitterName  string
-	GitCommitterEmail string
-	Mode              int
-	ModulePrefix      string
-	Authenticator     *ssh.PublicKeys
-	Importer          ImportMode
-	BlobStorage       blob.Storage
-	NoDupMode         bool
-	ModuleMode        bool
+	RpmLocation        string
+	UpstreamPrefix     string
+	SshKeyLocation     string
+	SshUser            string
+	Version            int
+	GitCommitterName   string
+	GitCommitterEmail  string
+	Mode               int
+	ModulePrefix       string
+	ImportBranchPrefix string
+	BranchPrefix       string
+	Authenticator      *ssh.PublicKeys
+	Importer           ImportMode
+	BlobStorage        blob.Storage
+	NoDupMode          bool
+	ModuleMode         bool
 }
 
 type ignoredSource struct {
@@ -65,6 +67,7 @@ type modeData struct {
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{name}.metadata
 func ProcessRPM(pd *ProcessData) {
+	tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	md := pd.Importer.RetrieveSource(pd)
 
 	remotePrefix := "dist"
@@ -146,8 +149,8 @@ func ProcessRPM(pd *ProcessData) {
 		}
 
 		match := tagImportRegex.FindStringSubmatch(matchString)
-		md.pushBranch = "rocky" + strings.TrimPrefix(match[2], "c")
-		newTag := "imports/rocky" + strings.TrimPrefix(match[1], "imports/c")
+		md.pushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], "c")
+		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/c")
 
 		shouldContinue := true
 		for _, ignoredTag := range tagIgnoreList {

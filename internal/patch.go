@@ -298,13 +298,13 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 		// we're bootstrapping a new distro for latest RHEL8 anyways. So earlier
 		// versions are not that important
 		if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
-			repString := fmt.Sprintf("rocky%ss-", string(split[4][0]))
-			newString := fmt.Sprintf("rocky%s-", string(split[4][0]))
+			repString := fmt.Sprintf("%s%ss-", pd.BranchPrefix, string(split[4][0]))
+			newString := fmt.Sprintf("%s%s-", pd.BranchPrefix, string(split[4][0]))
 			pushBranch = strings.Replace(md.pushBranch, repString, newString, 1)
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 2 {
 			pushBranch = md.pushBranch
 		} else if strings.HasPrefix(rpm.Ref, "stream-") {
-			pushBranch = fmt.Sprintf("rocky%s-stream-%s", string(split[3][0]), split[1])
+			pushBranch = fmt.Sprintf("%s%s-stream-%s", pd.BranchPrefix, string(split[3][0]), split[1])
 		} else if strings.HasPrefix(rpm.Ref, "rhel-") {
 			pushBranch = md.pushBranch
 		} else {

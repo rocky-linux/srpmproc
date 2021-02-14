@@ -88,7 +88,7 @@ func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
 		}
 	}
 
-	branch := fmt.Sprintf("rocky%d", pd.Version)
+	branch := fmt.Sprintf("%s%d", pd.BranchPrefix, pd.Version)
 	return &modeData{
 		repo:            repo,
 		worktree:        w,

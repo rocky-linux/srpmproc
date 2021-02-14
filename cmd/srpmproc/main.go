@@ -16,18 +16,20 @@ import (
 )
 
 var (
-	sourceRpm         string
-	sshKeyLocation    string
-	sshUser           string
-	upstreamPrefix    string
-	version           int
-	storageAddr       string
-	gitCommitterName  string
-	gitCommitterEmail string
-	modulePrefix      string
-	rpmPrefix         string
-	noDupMode         bool
-	moduleMode        bool
+	sourceRpm          string
+	sshKeyLocation     string
+	sshUser            string
+	upstreamPrefix     string
+	version            int
+	storageAddr        string
+	gitCommitterName   string
+	gitCommitterEmail  string
+	modulePrefix       string
+	rpmPrefix          string
+	importBranchPrefix string
+	branchPrefix       string
+	noDupMode          bool
+	moduleMode         bool
 )
 
 var root = &cobra.Command{
@@ -82,19 +84,21 @@ func mn(_ *cobra.Command, _ []string) {
 	}
 
 	internal.ProcessRPM(&internal.ProcessData{
-		Importer:          importer,
-		RpmLocation:       sourceRpmLocation,
-		UpstreamPrefix:    upstreamPrefix,
-		SshKeyLocation:    sshKeyLocation,
-		SshUser:           sshUser,
-		Version:           version,
-		BlobStorage:       blobStorage,
-		GitCommitterName:  gitCommitterName,
-		GitCommitterEmail: gitCommitterEmail,
-		ModulePrefix:      modulePrefix,
-		Authenticator:     authenticator,
-		NoDupMode:         noDupMode,
-		ModuleMode:        moduleMode,
+		Importer:           importer,
+		RpmLocation:        sourceRpmLocation,
+		UpstreamPrefix:     upstreamPrefix,
+		SshKeyLocation:     sshKeyLocation,
+		SshUser:            sshUser,
+		Version:            version,
+		BlobStorage:        blobStorage,
+		GitCommitterName:   gitCommitterName,
+		GitCommitterEmail:  gitCommitterEmail,
+		ModulePrefix:       modulePrefix,
+		ImportBranchPrefix: importBranchPrefix,
+		BranchPrefix:       branchPrefix,
+		Authenticator:      authenticator,
+		NoDupMode:          noDupMode,
+		ModuleMode:         moduleMode,
 	})
 }
 
@@ -114,6 +118,8 @@ func main() {
 	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "mustafa+distrobuild@bycrates.com", "Email of committer")
 	root.Flags().StringVar(&modulePrefix, "module-prefix", "https://git.centos.org/modules", "Where to retrieve modules if exists. Only used when source-rpm is a git repo")
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
+	root.Flags().StringVar(&importBranchPrefix, "import-branch-prefix", "c", "Import branch prefix")
+	root.Flags().StringVar(&branchPrefix, "branch-prefix", "r", "Branch prefix (replaces import-branch-prefix)")
 	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
 	root.Flags().BoolVar(&moduleMode, "module-mode", false, "If enabled, imports a module instead of a package")
 
