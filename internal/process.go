@@ -70,7 +70,7 @@ func ProcessRPM(pd *ProcessData) {
 	tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	md := pd.Importer.RetrieveSource(pd)
 
-	remotePrefix := "dist"
+	remotePrefix := "rpms"
 	if pd.ModuleMode {
 		remotePrefix = "modules"
 	}

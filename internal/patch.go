@@ -233,7 +233,7 @@ func getTipStream(pd *ProcessData, module string, pushBranch string) string {
 		log.Fatalf("could not init git repo: %v", err)
 	}
 
-	remoteUrl := fmt.Sprintf("%s/dist/%s.git", pd.UpstreamPrefix, module)
+	remoteUrl := fmt.Sprintf("%s/rpms/%s.git", pd.UpstreamPrefix, module)
 	refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 	remote, err := repo.CreateRemote(&config.RemoteConfig{
 		Name:  "origin",
