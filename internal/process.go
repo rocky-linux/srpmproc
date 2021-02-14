@@ -220,11 +220,13 @@ func ProcessRPM(pd *ProcessData) {
 			log.Fatalf("could not create metadata file: %v", err)
 		}
 		for _, source := range md.sourcesToIgnore {
-			if source.expired {
+			sourcePath := source.name
+
+			_, err := w.Filesystem.Stat(sourcePath)
+			if source.expired || err != nil {
 				continue
 			}
 
-			sourcePath := source.name
 			sourceFile, err := w.Filesystem.Open(sourcePath)
 			if err != nil {
 				log.Fatalf("could not open ignored source file %s: %v", sourcePath, err)
@@ -246,7 +248,7 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			path := fmt.Sprintf("%s", checksum)
+			path := checksum
 			if strContains(alreadyUploadedBlobs, path) {
 				continue
 			}
