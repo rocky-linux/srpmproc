@@ -134,7 +134,7 @@ func ProcessRPM(pd *ProcessData) {
 		var matchString string
 		if !tagImportRegex.MatchString(md.tagBranch) {
 			if pd.ModuleMode {
-				prefix := fmt.Sprintf("refs/heads/c%d", pd.Version)
+				prefix := fmt.Sprintf("refs/heads/%s%d", pd.ImportBranchPrefix, pd.Version)
 				if strings.HasPrefix(md.tagBranch, prefix) {
 					replace := strings.Replace(md.tagBranch, "refs/heads/", "", 1)
 					matchString = fmt.Sprintf("refs/tags/imports/%s/%s", replace, filepath.Base(pd.RpmLocation))
@@ -142,7 +142,7 @@ func ProcessRPM(pd *ProcessData) {
 				}
 			}
 			if !tagImportRegex.MatchString(matchString) {
-				log.Fatal("import tag invalid")
+				continue
 			}
 		} else {
 			matchString = md.tagBranch

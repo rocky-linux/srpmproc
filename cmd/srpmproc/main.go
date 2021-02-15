@@ -114,8 +114,8 @@ func main() {
 
 	root.Flags().StringVar(&sshKeyLocation, "ssh-key-location", "", "Location of the SSH key to use to authenticate against upstream")
 	root.Flags().StringVar(&sshUser, "ssh-user", "git", "SSH User")
-	root.Flags().StringVar(&gitCommitterName, "git-committer-name", "distrobuild-bot", "Name of committer")
-	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "mustafa+distrobuild@bycrates.com", "Email of committer")
+	root.Flags().StringVar(&gitCommitterName, "git-committer-name", "rockyautomation", "Name of committer")
+	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "rockyautomation@rockylinux.org", "Email of committer")
 	root.Flags().StringVar(&modulePrefix, "module-prefix", "https://git.centos.org/modules", "Where to retrieve modules if exists. Only used when source-rpm is a git repo")
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
 	root.Flags().StringVar(&importBranchPrefix, "import-branch-prefix", "c", "Import branch prefix")
