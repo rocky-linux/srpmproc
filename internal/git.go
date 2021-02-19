@@ -101,7 +101,7 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 	}
 }
 
-func (g *GitMode) WriteSource(md *modeData) {
+func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 	remote, err := md.repo.Remote("upstream")
 	if err != nil {
 		log.Fatalf("could not get upstream remote: %v", err)
@@ -168,27 +168,42 @@ func (g *GitMode) WriteSource(md *modeData) {
 		hash := strings.TrimSpace(lineInfo[0])
 		path := strings.TrimSpace(lineInfo[1])
 
-		url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), branchName, hash)
-		log.Printf("downloading %s", url)
+		var body []byte
 
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Fatalf("could not create new http request: %v", err)
-		}
-		req.Header.Set("Accept-Encoding", "*")
+		if md.blobCache[hash] != nil {
+			body = md.blobCache[hash]
+			log.Printf("retrieving %s from cache", hash)
+		} else {
+			fromBlobStorage := pd.BlobStorage.Read(hash)
+			if fromBlobStorage != nil {
+				body = fromBlobStorage
+				log.Printf("downloading %s from blob storage", hash)
+			} else {
+				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), branchName, hash)
+				log.Printf("downloading %s", url)
 
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Fatalf("could not download dist-git file: %v", err)
-		}
+				req, err := http.NewRequest("GET", url, nil)
+				if err != nil {
+					log.Fatalf("could not create new http request: %v", err)
+				}
+				req.Header.Set("Accept-Encoding", "*")
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			log.Fatalf("could not read the whole dist-git file: %v", err)
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			log.Fatalf("could not close body handle: %v", err)
+				resp, err := client.Do(req)
+				if err != nil {
+					log.Fatalf("could not download dist-git file: %v", err)
+				}
+
+				body, err = ioutil.ReadAll(resp.Body)
+				if err != nil {
+					log.Fatalf("could not read the whole dist-git file: %v", err)
+				}
+				err = resp.Body.Close()
+				if err != nil {
+					log.Fatalf("could not close body handle: %v", err)
+				}
+			}
+
+			md.blobCache[hash] = body
 		}
 
 		f, err := md.worktree.Filesystem.Create(path)

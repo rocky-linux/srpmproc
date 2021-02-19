@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"io/ioutil"
 	"log"
 )
 
@@ -34,4 +36,29 @@ func (s *S3) Write(path string, content []byte) {
 	if err != nil {
 		log.Fatalf("failed to upload file to s3, %v", err)
 	}
+}
+
+func (s *S3) Read(path string) []byte {
+	obj, err := s.uploader.S3.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(path),
+	})
+	if err != nil {
+		return nil
+	}
+
+	body, err := ioutil.ReadAll(obj.Body)
+	if err != nil {
+		return nil
+	}
+
+	return body
+}
+
+func (s *S3) Exists(path string) bool {
+	_, err := s.uploader.S3.GetObject(&s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(path),
+	})
+	return err == nil
 }

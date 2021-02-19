@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/cavaliercoder/go-rpm"
 	"github.com/go-git/go-billy/v5/memfs"
@@ -15,6 +16,7 @@ import (
 	"hash"
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -57,6 +59,7 @@ type modeData struct {
 	pushBranch      string
 	branches        []string
 	sourcesToIgnore []*ignoredSource
+	blobCache       map[string][]byte
 }
 
 // ProcessRPM checks the RPM specs and discards any remote files
@@ -69,11 +72,17 @@ type modeData struct {
 func ProcessRPM(pd *ProcessData) {
 	tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	md := pd.Importer.RetrieveSource(pd)
+	md.blobCache = map[string][]byte{}
 
 	remotePrefix := "rpms"
 	if pd.ModuleMode {
 		remotePrefix = "modules"
 	}
+
+	var pushedHashes []string
+
+	// already uploaded blobs are skipped
+	var alreadyUploadedBlobs []string
 
 	// if no-dup-mode is enabled then skip already imported versions
 	var tagIgnoreList []string
@@ -113,6 +122,7 @@ func ProcessRPM(pd *ProcessData) {
 	sourceWorktree := *md.worktree
 
 	for _, branch := range md.branches {
+		md.sourcesToIgnore = []*ignoredSource{}
 		md.repo = &sourceRepo
 		md.worktree = &sourceWorktree
 		md.tagBranch = branch
@@ -202,7 +212,7 @@ func ProcessRPM(pd *ProcessData) {
 			}
 		}
 
-		pd.Importer.WriteSource(md)
+		pd.Importer.WriteSource(pd, md)
 
 		copyFromFs(md.worktree.Filesystem, w.Filesystem, ".")
 		md.repo = repo
@@ -214,8 +224,6 @@ func ProcessRPM(pd *ProcessData) {
 			executePatchesRpm(pd, md)
 		}
 
-		// already uploaded blobs are skipped
-		var alreadyUploadedBlobs []string
 		// get ignored files hash and add to .{name}.metadata
 		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())
 		metadata, err := w.Filesystem.Create(metadataFile)
@@ -255,8 +263,10 @@ func ProcessRPM(pd *ProcessData) {
 			if strContains(alreadyUploadedBlobs, path) {
 				continue
 			}
-			pd.BlobStorage.Write(path, sourceFileBts)
-			log.Printf("wrote %s to blob storage", path)
+			if !pd.BlobStorage.Exists(path) {
+				pd.BlobStorage.Write(path, sourceFileBts)
+				log.Printf("wrote %s to blob storage", path)
+			}
 			alreadyUploadedBlobs = append(alreadyUploadedBlobs, path)
 		}
 
@@ -341,5 +351,13 @@ func ProcessRPM(pd *ProcessData) {
 		if err != nil {
 			log.Fatalf("could not push to remote: %v", err)
 		}
+
+		hashString := obj.Hash.String()
+		pushedHashes = append(pushedHashes, fmt.Sprintf("%s:%s", md.pushBranch, hashString))
+	}
+
+	err := json.NewEncoder(os.Stdout).Encode(pushedHashes)
+	if err != nil {
+		log.Fatalf("could not print hashes")
 	}
 }

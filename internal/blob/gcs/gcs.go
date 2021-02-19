@@ -3,6 +3,7 @@ package gcs
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"io/ioutil"
 	"log"
 )
 
@@ -36,4 +37,28 @@ func (g *GCS) Write(path string, content []byte) {
 	if err := w.Close(); err != nil {
 		log.Fatalf("could not close gcs writer to source: %v", err)
 	}
+}
+
+func (g *GCS) Read(path string) []byte {
+	ctx := context.Background()
+	obj := g.bucket.Object(path)
+
+	r, err := obj.NewReader(ctx)
+	if err != nil {
+		return nil
+	}
+
+	body, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil
+	}
+
+	return body
+}
+
+func (g *GCS) Exists(path string) bool {
+	ctx := context.Background()
+	obj := g.bucket.Object(path)
+	_, err := obj.NewReader(ctx)
+	return err == nil
 }
