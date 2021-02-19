@@ -99,7 +99,7 @@ func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
 	}
 }
 
-func (s *SrpmMode) WriteSource(md *modeData) {
+func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
 	for fileName, contents := range md.fileWrites {
 		var newPath string
 		if filepath.Ext(fileName) == ".spec" {
