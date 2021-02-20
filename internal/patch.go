@@ -204,7 +204,7 @@ func executePatchesRpm(pd *ProcessData, md *modeData) {
 		return
 	} else {
 		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewRemoteReferenceName("origin", "master"),
+			Branch: plumbing.NewRemoteReferenceName("origin", "main"),
 			Force:  true,
 		})
 		// common patches found, apply them
@@ -303,6 +303,9 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 			pushBranch = strings.Replace(md.pushBranch, repString, newString, 1)
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 2 {
 			pushBranch = md.pushBranch
+		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 3 {
+			// example: ant
+			pushBranch = fmt.Sprintf("%s%d-stream-%s", pd.BranchPrefix, pd.Version, split[2])
 		} else if strings.HasPrefix(rpm.Ref, "stream-") {
 			pushBranch = fmt.Sprintf("%s%s-stream-%s", pd.BranchPrefix, string(split[3][0]), split[1])
 		} else if strings.HasPrefix(rpm.Ref, "rhel-") {

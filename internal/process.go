@@ -79,7 +79,7 @@ func ProcessRPM(pd *ProcessData) {
 		remotePrefix = "modules"
 	}
 
-	var pushedHashes []string
+	latestHashForBranch := map[string]string{}
 
 	// already uploaded blobs are skipped
 	var alreadyUploadedBlobs []string
@@ -122,12 +122,15 @@ func ProcessRPM(pd *ProcessData) {
 	sourceWorktree := *md.worktree
 
 	for _, branch := range md.branches {
-		md.sourcesToIgnore = []*ignoredSource{}
 		md.repo = &sourceRepo
 		md.worktree = &sourceWorktree
 		md.tagBranch = branch
 		for _, source := range md.sourcesToIgnore {
 			source.expired = true
+		}
+
+		if strings.Contains(md.tagBranch, "-beta") {
+			continue
 		}
 
 		rpmFile := md.rpmFile
@@ -292,6 +295,18 @@ func ProcessRPM(pd *ProcessData) {
 		status, _ := w.Status()
 		log.Printf("successfully processed:\n%s", status)
 
+		statusLines := strings.Split(status.String(), "\n")
+		for _, line := range statusLines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "D") {
+				path := strings.TrimPrefix(trimmed, "D ")
+				_, err := w.Remove(path)
+				if err != nil {
+					log.Fatalf("could not delete extra file %s: %v", path, err)
+				}
+			}
+		}
+
 		var hashes []plumbing.Hash
 		var pushRefspecs []config.RefSpec
 
@@ -353,10 +368,10 @@ func ProcessRPM(pd *ProcessData) {
 		}
 
 		hashString := obj.Hash.String()
-		pushedHashes = append(pushedHashes, fmt.Sprintf("%s:%s", md.pushBranch, hashString))
+		latestHashForBranch[md.pushBranch] = hashString
 	}
 
-	err := json.NewEncoder(os.Stdout).Encode(pushedHashes)
+	err := json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
 	if err != nil {
 		log.Fatalf("could not print hashes")
 	}
