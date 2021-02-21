@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob"
 	"github.com/cavaliercoder/go-rpm"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
@@ -12,7 +13,6 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/go-git/go-git/v5/storage/memory"
-	"github.com/mstg/srpmproc/internal/blob"
 	"hash"
 	"io/ioutil"
 	"log"
@@ -162,8 +162,8 @@ func ProcessRPM(pd *ProcessData) {
 		}
 
 		match := tagImportRegex.FindStringSubmatch(matchString)
-		md.pushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], "c")
-		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/c")
+		md.pushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
+		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 
 		shouldContinue := true
 		for _, ignoredTag := range tagIgnoreList {

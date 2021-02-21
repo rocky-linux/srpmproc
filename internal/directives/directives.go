@@ -1,8 +1,11 @@
 package directives
 
 import (
+	"encoding/json"
+	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
 	"github.com/go-git/go-git/v5"
-	srpmprocpb "github.com/mstg/srpmproc/pb"
+	"log"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -17,5 +20,34 @@ func checkAddPrefix(file string) string {
 }
 
 func Apply(cfg *srpmprocpb.Cfg, patchTree *git.Worktree, pushTree *git.Worktree) {
-	replace(cfg, patchTree, pushTree)
+	var errs []string
+
+	err := replace(cfg, patchTree, pushTree)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	err = del(cfg, patchTree, pushTree)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	err = add(cfg, patchTree, pushTree)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	err = patch(cfg, patchTree, pushTree)
+	if err != nil {
+		errs = append(errs, err.Error())
+	}
+
+	if len(errs) > 0 {
+		err := json.NewEncoder(os.Stdout).Encode(errs)
+		if err != nil {
+			log.Fatal(errs)
+		}
+
+		os.Exit(1)
+	}
 }

@@ -60,10 +60,9 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 	}
 
 	err = remote.Fetch(&git.FetchOptions{
-		RemoteName: "upstream",
-		RefSpecs:   []config.RefSpec{refspec},
-		Tags:       git.AllTags,
-		Force:      true,
+		RefSpecs: []config.RefSpec{refspec},
+		Tags:     git.AllTags,
+		Force:    true,
 	})
 	if err != nil {
 		log.Fatalf("could not fetch upstream: %v", err)
@@ -71,20 +70,45 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 
 	var branches remoteTargetSlice
 
-	tagIter, err := repo.TagObjects()
-	if err != nil {
-		log.Fatalf("could not get tag objects: %v", err)
-	}
-	_ = tagIter.ForEach(func(tag *object.Tag) error {
-		log.Printf("tag: %s", tag.Name)
-		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/c%d", pd.Version)) {
+	tagAdd := func(tag *object.Tag) error {
+		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/%s%d", pd.ImportBranchPrefix, pd.Version)) {
+			log.Printf("tag: %s", tag.Name)
 			branches = append(branches, remoteTarget{
 				remote: fmt.Sprintf("refs/tags/%s", tag.Name),
 				when:   tag.Tagger.When,
 			})
 		}
 		return nil
-	})
+	}
+
+	tagIter, err := repo.TagObjects()
+	if err != nil {
+		log.Fatalf("could not get tag objects: %v", err)
+	}
+	_ = tagIter.ForEach(tagAdd)
+
+	if len(branches) == 0 {
+		list, err := remote.List(&git.ListOptions{})
+		if err != nil {
+			log.Fatalf("could not list upstream: %v", err)
+		}
+
+		for _, ref := range list {
+			if ref.Hash().IsZero() {
+				continue
+			}
+
+			commit, err := repo.CommitObject(ref.Hash())
+			if err != nil {
+				log.Fatalf("could not get commit object: %v", err)
+			}
+			_ = tagAdd(&object.Tag{
+				Name:   strings.TrimPrefix(string(ref.Name()), "refs/tags/"),
+				Tagger: commit.Committer,
+			})
+		}
+	}
+
 	sort.Sort(branches)
 
 	var sortedBranches []string
@@ -125,7 +149,7 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 		Tags:       git.AllTags,
 		Force:      true,
 	})
-	if err != nil {
+	if err != nil && err != git.NoErrAlreadyUpToDate {
 		log.Fatalf("could not fetch upstream: %v", err)
 	}
 

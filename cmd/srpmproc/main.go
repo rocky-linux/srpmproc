@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob/gcs"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob/s3"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/mstg/srpmproc/internal/blob"
-	"github.com/mstg/srpmproc/internal/blob/gcs"
-	"github.com/mstg/srpmproc/internal/blob/s3"
 	"log"
 	"os/user"
 	"path/filepath"
 	"strings"
 
-	"github.com/mstg/srpmproc/internal"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal"
 	"github.com/spf13/cobra"
 )
 

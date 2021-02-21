@@ -25,14 +25,64 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
-// Replace directive replaces literal files with other files.
+type SpecChange_FileOperation_Type int32
+
+const (
+	SpecChange_FileOperation_Unknown SpecChange_FileOperation_Type = 0
+	SpecChange_FileOperation_Source  SpecChange_FileOperation_Type = 1
+	SpecChange_FileOperation_Patch   SpecChange_FileOperation_Type = 2
+)
+
+// Enum value maps for SpecChange_FileOperation_Type.
+var (
+	SpecChange_FileOperation_Type_name = map[int32]string{
+		0: "Unknown",
+		1: "Source",
+		2: "Patch",
+	}
+	SpecChange_FileOperation_Type_value = map[string]int32{
+		"Unknown": 0,
+		"Source":  1,
+		"Patch":   2,
+	}
+)
+
+func (x SpecChange_FileOperation_Type) Enum() *SpecChange_FileOperation_Type {
+	p := new(SpecChange_FileOperation_Type)
+	*p = x
+	return p
+}
+
+func (x SpecChange_FileOperation_Type) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SpecChange_FileOperation_Type) Descriptor() protoreflect.EnumDescriptor {
+	return file_cfg_proto_enumTypes[0].Descriptor()
+}
+
+func (SpecChange_FileOperation_Type) Type() protoreflect.EnumType {
+	return &file_cfg_proto_enumTypes[0]
+}
+
+func (x SpecChange_FileOperation_Type) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SpecChange_FileOperation_Type.Descriptor instead.
+func (SpecChange_FileOperation_Type) EnumDescriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{4, 0, 0}
+}
+
+// Replace directive replaces a file from the rpm repository
+// with a file from the patch repository.
 // Replacing content can either be inline or in the same patch-tree.
 type Replace struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// required - replaced file
+	// Required - Replaced file
 	File string `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
 	// Types that are assignable to Replacing:
 	//	*Replace_WithFile
@@ -105,12 +155,12 @@ type isReplace_Replacing interface {
 }
 
 type Replace_WithFile struct {
-	// replace with in-tree file
+	// Replace with in-tree file
 	WithFile string `protobuf:"bytes,2,opt,name=with_file,json=withFile,proto3,oneof"`
 }
 
 type Replace_WithInline struct {
-	// replace with inline content
+	// Replace with inline content
 	WithInline string `protobuf:"bytes,3,opt,name=with_inline,json=withInline,proto3,oneof"`
 }
 
@@ -118,18 +168,318 @@ func (*Replace_WithFile) isReplace_Replacing() {}
 
 func (*Replace_WithInline) isReplace_Replacing() {}
 
+// Delete directive deletes literal files from the rpm repository.
+// Won't delete from spec automatically.
+// Use the `SpecChange` directive for that
+type Delete struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Required
+	File string `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
+}
+
+func (x *Delete) Reset() {
+	*x = Delete{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[1]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Delete) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Delete) ProtoMessage() {}
+
+func (x *Delete) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[1]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Delete.ProtoReflect.Descriptor instead.
+func (*Delete) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Delete) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+// Add directive adds a file from the patch repository to the rpm repository.
+type Add struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Required - file to add
+	File string `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
+	// Overrides file name if specified
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+}
+
+func (x *Add) Reset() {
+	*x = Add{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Add) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Add) ProtoMessage() {}
+
+func (x *Add) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Add.ProtoReflect.Descriptor instead.
+func (*Add) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Add) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *Add) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// Lookaside directive puts patched files in blob storage.
+// If tar is true, the files will be put into a tarball and gzipped
+type Lookaside struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Required - List of files that should be stored in blob storage
+	Files []string `protobuf:"bytes,1,rep,name=files,proto3" json:"files,omitempty"`
+	// Whether files should be put into a tarball and gzipped
+	Tar bool `protobuf:"varint,2,opt,name=tar,proto3" json:"tar,omitempty"`
+}
+
+func (x *Lookaside) Reset() {
+	*x = Lookaside{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Lookaside) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Lookaside) ProtoMessage() {}
+
+func (x *Lookaside) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Lookaside.ProtoReflect.Descriptor instead.
+func (*Lookaside) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Lookaside) GetFiles() []string {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+func (x *Lookaside) GetTar() bool {
+	if x != nil {
+		return x.Tar
+	}
+	return false
+}
+
+// SpecChange directive makes it possible to execute certain
+// plans against the package spec
+type SpecChange struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Operation:
+	//	*SpecChange_FileOperation_
+	Operation isSpecChange_Operation `protobuf_oneof:"operation"`
+}
+
+func (x *SpecChange) Reset() {
+	*x = SpecChange{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SpecChange) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpecChange) ProtoMessage() {}
+
+func (x *SpecChange) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpecChange.ProtoReflect.Descriptor instead.
+func (*SpecChange) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{4}
+}
+
+func (m *SpecChange) GetOperation() isSpecChange_Operation {
+	if m != nil {
+		return m.Operation
+	}
+	return nil
+}
+
+func (x *SpecChange) GetFileOperation() *SpecChange_FileOperation {
+	if x, ok := x.GetOperation().(*SpecChange_FileOperation_); ok {
+		return x.FileOperation
+	}
+	return nil
+}
+
+type isSpecChange_Operation interface {
+	isSpecChange_Operation()
+}
+
+type SpecChange_FileOperation_ struct {
+	FileOperation *SpecChange_FileOperation `protobuf:"bytes,1,opt,name=file_operation,json=fileOperation,proto3,oneof"`
+}
+
+func (*SpecChange_FileOperation_) isSpecChange_Operation() {}
+
+type Patch struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Path to patch file from repo root
+	File string `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
+	// Srpmproc adds `SOURCES/` to files in a diff
+	// without a prefix if strict is false.
+	// If strict is true, then that is disabled.
+	Strict bool `protobuf:"varint,2,opt,name=strict,proto3" json:"strict,omitempty"`
+}
+
+func (x *Patch) Reset() {
+	*x = Patch{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Patch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Patch) ProtoMessage() {}
+
+func (x *Patch) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Patch.ProtoReflect.Descriptor instead.
+func (*Patch) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Patch) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *Patch) GetStrict() bool {
+	if x != nil {
+		return x.Strict
+	}
+	return false
+}
+
 type Cfg struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Replace []*Replace `protobuf:"bytes,1,rep,name=replace,proto3" json:"replace,omitempty"`
+	Replace    []*Replace    `protobuf:"bytes,1,rep,name=replace,proto3" json:"replace,omitempty"`
+	Delete     []*Delete     `protobuf:"bytes,2,rep,name=delete,proto3" json:"delete,omitempty"`
+	Add        []*Add        `protobuf:"bytes,3,rep,name=add,proto3" json:"add,omitempty"`
+	Lookaside  []*Lookaside  `protobuf:"bytes,4,rep,name=lookaside,proto3" json:"lookaside,omitempty"`
+	SpecChange []*SpecChange `protobuf:"bytes,5,rep,name=spec_change,json=specChange,proto3" json:"spec_change,omitempty"`
+	Patch      []*Patch      `protobuf:"bytes,6,rep,name=patch,proto3" json:"patch,omitempty"`
 }
 
 func (x *Cfg) Reset() {
 	*x = Cfg{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_cfg_proto_msgTypes[1]
+		mi := &file_cfg_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -142,7 +492,7 @@ func (x *Cfg) String() string {
 func (*Cfg) ProtoMessage() {}
 
 func (x *Cfg) ProtoReflect() protoreflect.Message {
-	mi := &file_cfg_proto_msgTypes[1]
+	mi := &file_cfg_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -155,7 +505,7 @@ func (x *Cfg) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Cfg.ProtoReflect.Descriptor instead.
 func (*Cfg) Descriptor() ([]byte, []int) {
-	return file_cfg_proto_rawDescGZIP(), []int{1}
+	return file_cfg_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Cfg) GetReplace() []*Replace {
@@ -164,6 +514,145 @@ func (x *Cfg) GetReplace() []*Replace {
 	}
 	return nil
 }
+
+func (x *Cfg) GetDelete() []*Delete {
+	if x != nil {
+		return x.Delete
+	}
+	return nil
+}
+
+func (x *Cfg) GetAdd() []*Add {
+	if x != nil {
+		return x.Add
+	}
+	return nil
+}
+
+func (x *Cfg) GetLookaside() []*Lookaside {
+	if x != nil {
+		return x.Lookaside
+	}
+	return nil
+}
+
+func (x *Cfg) GetSpecChange() []*SpecChange {
+	if x != nil {
+		return x.SpecChange
+	}
+	return nil
+}
+
+func (x *Cfg) GetPatch() []*Patch {
+	if x != nil {
+		return x.Patch
+	}
+	return nil
+}
+
+// The FileOperation plan allows patchers to add or delete
+// a file from the spec.
+type SpecChange_FileOperation struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// File name
+	File string `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
+	// File type
+	Type SpecChange_FileOperation_Type `protobuf:"varint,2,opt,name=type,proto3,enum=srpmproc.SpecChange_FileOperation_Type" json:"type,omitempty"`
+	// Types that are assignable to Mode:
+	//	*SpecChange_FileOperation_Add
+	//	*SpecChange_FileOperation_Delete
+	Mode isSpecChange_FileOperation_Mode `protobuf_oneof:"mode"`
+}
+
+func (x *SpecChange_FileOperation) Reset() {
+	*x = SpecChange_FileOperation{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_cfg_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SpecChange_FileOperation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SpecChange_FileOperation) ProtoMessage() {}
+
+func (x *SpecChange_FileOperation) ProtoReflect() protoreflect.Message {
+	mi := &file_cfg_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SpecChange_FileOperation.ProtoReflect.Descriptor instead.
+func (*SpecChange_FileOperation) Descriptor() ([]byte, []int) {
+	return file_cfg_proto_rawDescGZIP(), []int{4, 0}
+}
+
+func (x *SpecChange_FileOperation) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *SpecChange_FileOperation) GetType() SpecChange_FileOperation_Type {
+	if x != nil {
+		return x.Type
+	}
+	return SpecChange_FileOperation_Unknown
+}
+
+func (m *SpecChange_FileOperation) GetMode() isSpecChange_FileOperation_Mode {
+	if m != nil {
+		return m.Mode
+	}
+	return nil
+}
+
+func (x *SpecChange_FileOperation) GetAdd() bool {
+	if x, ok := x.GetMode().(*SpecChange_FileOperation_Add); ok {
+		return x.Add
+	}
+	return false
+}
+
+func (x *SpecChange_FileOperation) GetDelete() bool {
+	if x, ok := x.GetMode().(*SpecChange_FileOperation_Delete); ok {
+		return x.Delete
+	}
+	return false
+}
+
+type isSpecChange_FileOperation_Mode interface {
+	isSpecChange_FileOperation_Mode()
+}
+
+type SpecChange_FileOperation_Add struct {
+	// Add won't add the file to the tree.
+	// Use the `Add` directive for that
+	Add bool `protobuf:"varint,3,opt,name=add,proto3,oneof"`
+}
+
+type SpecChange_FileOperation_Delete struct {
+	// Delete won't delete the file from the tree.
+	// Use the `Delete` directive for that
+	Delete bool `protobuf:"varint,4,opt,name=delete,proto3,oneof"`
+}
+
+func (*SpecChange_FileOperation_Add) isSpecChange_FileOperation_Mode() {}
+
+func (*SpecChange_FileOperation_Delete) isSpecChange_FileOperation_Mode() {}
 
 var File_cfg_proto protoreflect.FileDescriptor
 
@@ -176,13 +665,57 @@ var file_cfg_proto_rawDesc = []byte{
 	0x69, 0x6c, 0x65, 0x12, 0x21, 0x0a, 0x0b, 0x77, 0x69, 0x74, 0x68, 0x5f, 0x69, 0x6e, 0x6c, 0x69,
 	0x6e, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x0a, 0x77, 0x69, 0x74, 0x68,
 	0x49, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x42, 0x0b, 0x0a, 0x09, 0x72, 0x65, 0x70, 0x6c, 0x61, 0x63,
-	0x69, 0x6e, 0x67, 0x22, 0x32, 0x0a, 0x03, 0x43, 0x66, 0x67, 0x12, 0x2b, 0x0a, 0x07, 0x72, 0x65,
-	0x70, 0x6c, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x73, 0x72,
-	0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x52, 0x65, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x52, 0x07,
-	0x72, 0x65, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x42, 0x28, 0x5a, 0x26, 0x67, 0x69, 0x74, 0x68, 0x75,
-	0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x73, 0x74, 0x67, 0x2f, 0x73, 0x72, 0x70, 0x6d, 0x70,
-	0x72, 0x6f, 0x63, 0x2f, 0x70, 0x62, 0x3b, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x70,
-	0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x69, 0x6e, 0x67, 0x22, 0x1c, 0x0a, 0x06, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x12, 0x0a,
+	0x04, 0x66, 0x69, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x66, 0x69, 0x6c,
+	0x65, 0x22, 0x2d, 0x0a, 0x03, 0x41, 0x64, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x66, 0x69, 0x6c, 0x65,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x66, 0x69, 0x6c, 0x65, 0x12, 0x12, 0x0a, 0x04,
+	0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65,
+	0x22, 0x33, 0x0a, 0x09, 0x4c, 0x6f, 0x6f, 0x6b, 0x61, 0x73, 0x69, 0x64, 0x65, 0x12, 0x14, 0x0a,
+	0x05, 0x66, 0x69, 0x6c, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x05, 0x66, 0x69,
+	0x6c, 0x65, 0x73, 0x12, 0x10, 0x0a, 0x03, 0x74, 0x61, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x03, 0x74, 0x61, 0x72, 0x22, 0xab, 0x02, 0x0a, 0x0a, 0x53, 0x70, 0x65, 0x63, 0x43, 0x68,
+	0x61, 0x6e, 0x67, 0x65, 0x12, 0x4b, 0x0a, 0x0e, 0x66, 0x69, 0x6c, 0x65, 0x5f, 0x6f, 0x70, 0x65,
+	0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x73,
+	0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x53, 0x70, 0x65, 0x63, 0x43, 0x68, 0x61, 0x6e,
+	0x67, 0x65, 0x2e, 0x46, 0x69, 0x6c, 0x65, 0x4f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x48, 0x00, 0x52, 0x0d, 0x66, 0x69, 0x6c, 0x65, 0x4f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f,
+	0x6e, 0x1a, 0xc2, 0x01, 0x0a, 0x0d, 0x46, 0x69, 0x6c, 0x65, 0x4f, 0x70, 0x65, 0x72, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x12, 0x12, 0x0a, 0x04, 0x66, 0x69, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x66, 0x69, 0x6c, 0x65, 0x12, 0x3b, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x27, 0x2e, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63,
+	0x2e, 0x53, 0x70, 0x65, 0x63, 0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x2e, 0x46, 0x69, 0x6c, 0x65,
+	0x4f, 0x70, 0x65, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2e, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04,
+	0x74, 0x79, 0x70, 0x65, 0x12, 0x12, 0x0a, 0x03, 0x61, 0x64, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28,
+	0x08, 0x48, 0x00, 0x52, 0x03, 0x61, 0x64, 0x64, 0x12, 0x18, 0x0a, 0x06, 0x64, 0x65, 0x6c, 0x65,
+	0x74, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x08, 0x48, 0x00, 0x52, 0x06, 0x64, 0x65, 0x6c, 0x65,
+	0x74, 0x65, 0x22, 0x2a, 0x0a, 0x04, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x6e,
+	0x6b, 0x6e, 0x6f, 0x77, 0x6e, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x53, 0x6f, 0x75, 0x72, 0x63,
+	0x65, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x50, 0x61, 0x74, 0x63, 0x68, 0x10, 0x02, 0x42, 0x06,
+	0x0a, 0x04, 0x6d, 0x6f, 0x64, 0x65, 0x42, 0x0b, 0x0a, 0x09, 0x6f, 0x70, 0x65, 0x72, 0x61, 0x74,
+	0x69, 0x6f, 0x6e, 0x22, 0x33, 0x0a, 0x05, 0x50, 0x61, 0x74, 0x63, 0x68, 0x12, 0x12, 0x0a, 0x04,
+	0x66, 0x69, 0x6c, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x66, 0x69, 0x6c, 0x65,
+	0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x72, 0x69, 0x63, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x06, 0x73, 0x74, 0x72, 0x69, 0x63, 0x74, 0x22, 0x8e, 0x02, 0x0a, 0x03, 0x43, 0x66, 0x67,
+	0x12, 0x2b, 0x0a, 0x07, 0x72, 0x65, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x11, 0x2e, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x52, 0x65, 0x70,
+	0x6c, 0x61, 0x63, 0x65, 0x52, 0x07, 0x72, 0x65, 0x70, 0x6c, 0x61, 0x63, 0x65, 0x12, 0x28, 0x0a,
+	0x06, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e,
+	0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x52,
+	0x06, 0x64, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x12, 0x1f, 0x0a, 0x03, 0x61, 0x64, 0x64, 0x18, 0x03,
+	0x20, 0x03, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e,
+	0x41, 0x64, 0x64, 0x52, 0x03, 0x61, 0x64, 0x64, 0x12, 0x31, 0x0a, 0x09, 0x6c, 0x6f, 0x6f, 0x6b,
+	0x61, 0x73, 0x69, 0x64, 0x65, 0x18, 0x04, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x73, 0x72,
+	0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x4c, 0x6f, 0x6f, 0x6b, 0x61, 0x73, 0x69, 0x64, 0x65,
+	0x52, 0x09, 0x6c, 0x6f, 0x6f, 0x6b, 0x61, 0x73, 0x69, 0x64, 0x65, 0x12, 0x35, 0x0a, 0x0b, 0x73,
+	0x70, 0x65, 0x63, 0x5f, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x18, 0x05, 0x20, 0x03, 0x28, 0x0b,
+	0x32, 0x14, 0x2e, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x53, 0x70, 0x65, 0x63,
+	0x43, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x52, 0x0a, 0x73, 0x70, 0x65, 0x63, 0x43, 0x68, 0x61, 0x6e,
+	0x67, 0x65, 0x12, 0x25, 0x0a, 0x05, 0x70, 0x61, 0x74, 0x63, 0x68, 0x18, 0x06, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x0f, 0x2e, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2e, 0x50, 0x61, 0x74,
+	0x63, 0x68, 0x52, 0x05, 0x70, 0x61, 0x74, 0x63, 0x68, 0x42, 0x28, 0x5a, 0x26, 0x67, 0x69, 0x74,
+	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6d, 0x73, 0x74, 0x67, 0x2f, 0x73, 0x72, 0x70,
+	0x6d, 0x70, 0x72, 0x6f, 0x63, 0x2f, 0x70, 0x62, 0x3b, 0x73, 0x72, 0x70, 0x6d, 0x70, 0x72, 0x6f,
+	0x63, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -197,18 +730,33 @@ func file_cfg_proto_rawDescGZIP() []byte {
 	return file_cfg_proto_rawDescData
 }
 
-var file_cfg_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_cfg_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_cfg_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_cfg_proto_goTypes = []interface{}{
-	(*Replace)(nil), // 0: srpmproc.Replace
-	(*Cfg)(nil),     // 1: srpmproc.Cfg
+	(SpecChange_FileOperation_Type)(0), // 0: srpmproc.SpecChange.FileOperation.Type
+	(*Replace)(nil),                    // 1: srpmproc.Replace
+	(*Delete)(nil),                     // 2: srpmproc.Delete
+	(*Add)(nil),                        // 3: srpmproc.Add
+	(*Lookaside)(nil),                  // 4: srpmproc.Lookaside
+	(*SpecChange)(nil),                 // 5: srpmproc.SpecChange
+	(*Patch)(nil),                      // 6: srpmproc.Patch
+	(*Cfg)(nil),                        // 7: srpmproc.Cfg
+	(*SpecChange_FileOperation)(nil),   // 8: srpmproc.SpecChange.FileOperation
 }
 var file_cfg_proto_depIdxs = []int32{
-	0, // 0: srpmproc.Cfg.replace:type_name -> srpmproc.Replace
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8, // 0: srpmproc.SpecChange.file_operation:type_name -> srpmproc.SpecChange.FileOperation
+	1, // 1: srpmproc.Cfg.replace:type_name -> srpmproc.Replace
+	2, // 2: srpmproc.Cfg.delete:type_name -> srpmproc.Delete
+	3, // 3: srpmproc.Cfg.add:type_name -> srpmproc.Add
+	4, // 4: srpmproc.Cfg.lookaside:type_name -> srpmproc.Lookaside
+	5, // 5: srpmproc.Cfg.spec_change:type_name -> srpmproc.SpecChange
+	6, // 6: srpmproc.Cfg.patch:type_name -> srpmproc.Patch
+	0, // 7: srpmproc.SpecChange.FileOperation.type:type_name -> srpmproc.SpecChange.FileOperation.Type
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_cfg_proto_init() }
@@ -230,7 +778,79 @@ func file_cfg_proto_init() {
 			}
 		}
 		file_cfg_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Delete); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Add); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Lookaside); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SpecChange); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Patch); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Cfg); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_cfg_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SpecChange_FileOperation); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -246,18 +866,26 @@ func file_cfg_proto_init() {
 		(*Replace_WithFile)(nil),
 		(*Replace_WithInline)(nil),
 	}
+	file_cfg_proto_msgTypes[4].OneofWrappers = []interface{}{
+		(*SpecChange_FileOperation_)(nil),
+	}
+	file_cfg_proto_msgTypes[7].OneofWrappers = []interface{}{
+		(*SpecChange_FileOperation_Add)(nil),
+		(*SpecChange_FileOperation_Delete)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_cfg_proto_rawDesc,
-			NumEnums:      0,
-			NumMessages:   2,
+			NumEnums:      1,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_cfg_proto_goTypes,
 		DependencyIndexes: file_cfg_proto_depIdxs,
+		EnumInfos:         file_cfg_proto_enumTypes,
 		MessageInfos:      file_cfg_proto_msgTypes,
 	}.Build()
 	File_cfg_proto = out.File

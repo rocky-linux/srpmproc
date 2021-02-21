@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/mstg/srpmproc/internal"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal"
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"

@@ -1,24 +1,100 @@
 syntax = "proto3";
 
-option go_package = "github.com/mstg/srpmproc/pb;srpmprocpb";
+option go_package = "git.rockylinux.org/release-engineering/public/srpmproc/pb;srpmprocpb";
 
 package srpmproc;
 
-// Replace directive replaces literal files with other files.
+// Replace directive replaces a file from the rpm repository
+// with a file from the patch repository.
 // Replacing content can either be inline or in the same patch-tree.
 message Replace {
-  // required - replaced file
+  // Required - Replaced file
   string file = 1;
 
   oneof replacing {
-    // replace with in-tree file
+    // Replace with in-tree file
     string with_file = 2;
 
-    // replace with inline content
+    // Replace with inline content
     string with_inline = 3;
   }
 }
 
+// Delete directive deletes literal files from the rpm repository.
+// Won't delete from spec automatically.
+// Use the `SpecChange` directive for that
+message Delete {
+  // Required
+  string file = 1;
+}
+
+// Add directive adds a file from the patch repository to the rpm repository.
+// The file is added in the `SOURCES` directory
+// Won't add to spec automatically.
+// Use the `SpecChange` directive for that
+message Add {
+  // Required - file to add
+  string file = 1;
+
+  // Overrides file name if specified
+  string name = 2;
+}
+
+// Lookaside directive puts patched files in blob storage.
+// If tar is true, the files will be put into a tarball and gzipped
+message Lookaside {
+  // Required - List of files that should be stored in blob storage
+  repeated string files = 1;
+
+  // Whether files should be put into a tarball and gzipped
+  bool tar = 2;
+}
+
+// SpecChange directive makes it possible to execute certain
+// plans against the package spec
+message SpecChange {
+  // The FileOperation plan allows patchers to add or delete
+  // a file from the spec.
+  message FileOperation {
+    enum Type {
+      Unknown = 0;
+      Source = 1;
+      Patch = 2;
+    }
+    // File name
+    string file = 1;
+    // File type
+    Type type = 2;
+
+    oneof mode {
+      // Add won't add the file to the tree.
+      // Use the `Add` directive for that
+      bool add = 3;
+      // Delete won't delete the file from the tree.
+      // Use the `Delete` directive for that
+      bool delete = 4;
+    }
+  }
+  oneof operation {
+    FileOperation file_operation = 1;
+  }
+}
+
+message Patch {
+  // Path to patch file from repo root
+  string file = 1;
+
+  // Srpmproc adds `SOURCES/` to files in a diff
+  // without a prefix if strict is false.
+  // If strict is true, then that is disabled.
+  bool strict = 2;
+}
+
 message Cfg {
   repeated Replace replace = 1;
+  repeated Delete delete = 2;
+  repeated Add add = 3;
+  repeated Lookaside lookaside = 4;
+  repeated SpecChange spec_change = 5;
+  repeated Patch patch = 6;
 }
