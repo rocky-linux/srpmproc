@@ -24,6 +24,7 @@ type sourcePatchOperationInLoopRequest struct {
 	lastNum       *int
 	in            *bool
 	expectedField string
+	operation     srpmprocpb.SpecChange_FileOperation_Type
 }
 
 type sourcePatchOperationAfterLoopRequest struct {
@@ -40,7 +41,7 @@ type sourcePatchOperationAfterLoopRequest struct {
 func sourcePatchOperationInLoop(req *sourcePatchOperationInLoopRequest) error {
 	if strings.HasPrefix(req.field, req.expectedField) {
 		for _, file := range req.cfg.SpecChange.File {
-			if file.Type != srpmprocpb.SpecChange_FileOperation_Source {
+			if file.Type != req.operation {
 				continue
 			}
 
@@ -223,8 +224,9 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				value:         &value,
 				lastNum:       &lastSourceNum,
 				longestField:  longestField,
-				expectedField: "Source",
 				in:            &inSources,
+				expectedField: "Source",
+				operation:     srpmprocpb.SpecChange_FileOperation_Source,
 			})
 			if err != nil {
 				return err
@@ -238,6 +240,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				lastNum:       &lastPatchNum,
 				in:            &inPatches,
 				expectedField: "Patch",
+				operation:     srpmprocpb.SpecChange_FileOperation_Patch,
 			})
 			if err != nil {
 				return err
