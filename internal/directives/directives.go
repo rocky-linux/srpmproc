@@ -2,6 +2,7 @@ package directives
 
 import (
 	"encoding/json"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
 	"github.com/go-git/go-git/v5"
 	"log"
@@ -19,27 +20,23 @@ func checkAddPrefix(file string) string {
 	return filepath.Join("SOURCES", file)
 }
 
-func Apply(cfg *srpmprocpb.Cfg, patchTree *git.Worktree, pushTree *git.Worktree) {
+func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
 	var errs []string
 
-	err := replace(cfg, patchTree, pushTree)
-	if err != nil {
-		errs = append(errs, err.Error())
+	directives := []func(*srpmprocpb.Cfg, *data.ProcessData, *data.ModeData, *git.Worktree, *git.Worktree) error{
+		replace,
+		del,
+		add,
+		patch,
+		lookaside,
+		specChange,
 	}
 
-	err = del(cfg, patchTree, pushTree)
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	err = add(cfg, patchTree, pushTree)
-	if err != nil {
-		errs = append(errs, err.Error())
-	}
-
-	err = patch(cfg, patchTree, pushTree)
-	if err != nil {
-		errs = append(errs, err.Error())
+	for _, directive := range directives {
+		err := directive(cfg, pd, md, patchTree, pushTree)
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
 	}
 
 	if len(errs) > 0 {

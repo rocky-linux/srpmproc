@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/go-git/go-git/v5"
 	"log"
 )
 
-func patch(cfg *srpmprocpb.Cfg, patchTree *git.Worktree, pushTree *git.Worktree) error {
+func patch(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, patch := range cfg.Patch {
 		patchFile, err := patchTree.Filesystem.Open(patch.File)
 		if err != nil {

@@ -3,11 +3,12 @@ package directives
 import (
 	"errors"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
 	"github.com/go-git/go-git/v5"
 )
 
-func del(cfg *srpmprocpb.Cfg, _ *git.Worktree, pushTree *git.Worktree) error {
+func del(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, _ *git.Worktree, pushTree *git.Worktree) error {
 	for _, del := range cfg.Delete {
 		filePath := del.File
 		_, err := pushTree.Filesystem.Stat(filePath)

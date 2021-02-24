@@ -1,12 +1,11 @@
 package internal
 
 import (
-	"bytes"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"git.rockylinux.org/release-engineering/public/srpmproc/internal/directives"
 	"git.rockylinux.org/release-engineering/public/srpmproc/modulemd"
 	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
-	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -19,107 +18,7 @@ import (
 	"strings"
 )
 
-func srpmPatches(patchTree *git.Worktree, pushTree *git.Worktree) {
-	// check SRPM patches
-	_, err := patchTree.Filesystem.Stat("ROCKY/SRPM")
-	if err == nil {
-		// iterate through patches
-		infos, err := patchTree.Filesystem.ReadDir("ROCKY/SRPM")
-		if err != nil {
-			log.Fatalf("could not walk patches: %v", err)
-		}
-
-		for _, info := range infos {
-			// can only process .patch files
-			if !strings.HasSuffix(info.Name(), ".patch") {
-				continue
-			}
-
-			log.Printf("applying %s", info.Name())
-			filePath := filepath.Join("ROCKY/SRPM", info.Name())
-
-			patch, err := patchTree.Filesystem.Open(filePath)
-			if err != nil {
-				log.Fatalf("could not open patch file %s: %v", info.Name(), err)
-			}
-			files, _, err := gitdiff.Parse(patch)
-			if err != nil {
-				log.Fatalf("could not parse patch file: %v", err)
-			}
-
-			for _, patchedFile := range files {
-				srcPath := patchedFile.NewName
-				if !strings.HasPrefix(srcPath, "SPECS") {
-					srcPath = filepath.Join("SOURCES", patchedFile.NewName)
-				}
-				var output bytes.Buffer
-				if !patchedFile.IsDelete && !patchedFile.IsNew {
-					patchSubjectFile, err := pushTree.Filesystem.Open(srcPath)
-					if err != nil {
-						log.Fatalf("could not open patch subject: %v", err)
-					}
-
-					err = gitdiff.NewApplier(patchSubjectFile).ApplyFile(&output, patchedFile)
-					if err != nil {
-						log.Fatalf("could not apply patch: %v", err)
-					}
-				}
-
-				oldName := filepath.Join("SOURCES", patchedFile.OldName)
-				_ = pushTree.Filesystem.Remove(oldName)
-				_ = pushTree.Filesystem.Remove(srcPath)
-
-				if patchedFile.IsNew {
-					newFile, err := pushTree.Filesystem.Create(srcPath)
-					if err != nil {
-						log.Fatalf("could not create new file: %v", err)
-					}
-					err = gitdiff.NewApplier(newFile).ApplyFile(&output, patchedFile)
-					if err != nil {
-						log.Fatalf("could not apply patch: %v", err)
-					}
-					_, err = newFile.Write(output.Bytes())
-					if err != nil {
-						log.Fatalf("could not write post-patch file: %v", err)
-					}
-					_, err = pushTree.Add(srcPath)
-					if err != nil {
-						log.Fatalf("could not add file %s to git: %v", srcPath, err)
-					}
-					log.Printf("git add %s", srcPath)
-				} else if !patchedFile.IsDelete {
-					newFile, err := pushTree.Filesystem.Create(srcPath)
-					if err != nil {
-						log.Fatalf("could not create post-patch file: %v", err)
-					}
-					_, err = newFile.Write(output.Bytes())
-					if err != nil {
-						log.Fatalf("could not write post-patch file: %v", err)
-					}
-					_, err = pushTree.Add(srcPath)
-					if err != nil {
-						log.Fatalf("could not add file %s to git: %v", srcPath, err)
-					}
-					log.Printf("git add %s", srcPath)
-				} else {
-					_, err = pushTree.Remove(oldName)
-					if err != nil {
-						log.Fatalf("could not remove file %s to git: %v", oldName, err)
-					}
-					log.Printf("git rm %s", oldName)
-				}
-			}
-
-			_, err = pushTree.Add(filePath)
-			if err != nil {
-				log.Fatalf("could not add file %s to git: %v", filePath, err)
-			}
-			log.Printf("git add %s", filePath)
-		}
-	}
-}
-
-func cfgPatches(patchTree *git.Worktree, pushTree *git.Worktree) {
+func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
 	// check CFG patches
 	_, err := patchTree.Filesystem.Stat("ROCKY/CFG")
 	if err == nil {
@@ -152,32 +51,31 @@ func cfgPatches(patchTree *git.Worktree, pushTree *git.Worktree) {
 				log.Fatalf("could not unmarshal cfg file: %v", err)
 			}
 
-			directives.Apply(&cfg, patchTree, pushTree)
+			directives.Apply(&cfg, pd, md, patchTree, pushTree)
 		}
 	}
 }
 
-func applyPatches(patchTree *git.Worktree, pushTree *git.Worktree) {
+func applyPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
 	// check if patches exist
 	_, err := patchTree.Filesystem.Stat("ROCKY")
 	if err == nil {
-		srpmPatches(patchTree, pushTree)
-		cfgPatches(patchTree, pushTree)
+		cfgPatches(pd, md, patchTree, pushTree)
 	}
 }
 
-func executePatchesRpm(pd *ProcessData, md *modeData) {
+func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 	// fetch patch repository
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not create new dist repo: %v", err)
+		log.Fatalf("could not create new dist Repo: %v", err)
 	}
 	w, err := repo.Worktree()
 	if err != nil {
-		log.Fatalf("could not get dist worktree: %v", err)
+		log.Fatalf("could not get dist Worktree: %v", err)
 	}
 
-	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, md.rpmFile.Name())
+	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, md.RpmFile.Name())
 	refspec := config.RefSpec(fmt.Sprintf("+refs/heads/*:refs/remotes/origin/*"))
 
 	_, err = repo.CreateRemote(&config.RemoteConfig{
@@ -195,12 +93,12 @@ func executePatchesRpm(pd *ProcessData, md *modeData) {
 		Auth:       pd.Authenticator,
 	})
 
-	refName := plumbing.NewBranchReferenceName(md.pushBranch)
+	refName := plumbing.NewBranchReferenceName(md.PushBranch)
 	log.Printf("set reference to ref: %s", refName)
 
 	if err != nil {
 		// no patches active
-		log.Println("info: patch repo not found")
+		log.Println("info: patch Repo not found")
 		return
 	} else {
 		err = w.Checkout(&git.CheckoutOptions{
@@ -209,28 +107,28 @@ func executePatchesRpm(pd *ProcessData, md *modeData) {
 		})
 		// common patches found, apply them
 		if err == nil {
-			applyPatches(w, md.worktree)
+			applyPatches(pd, md, w, md.Worktree)
 		} else {
 			log.Println("info: no common patches found")
 		}
 
 		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewRemoteReferenceName("origin", md.pushBranch),
+			Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
 			Force:  true,
 		})
 		// branch specific patches found, apply them
 		if err == nil {
-			applyPatches(w, md.worktree)
+			applyPatches(pd, md, w, md.Worktree)
 		} else {
 			log.Println("info: no branch specific patches found")
 		}
 	}
 }
 
-func getTipStream(pd *ProcessData, module string, pushBranch string) string {
+func getTipStream(pd *data.ProcessData, module string, pushBranch string) string {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not init git repo: %v", err)
+		log.Fatalf("could not init git Repo: %v", err)
 	}
 
 	remoteUrl := fmt.Sprintf("%s/rpms/%s.git", pd.UpstreamPrefix, module)
@@ -267,15 +165,15 @@ func getTipStream(pd *ProcessData, module string, pushBranch string) string {
 	return tipHash
 }
 
-func patchModuleYaml(pd *ProcessData, md *modeData) {
+func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 	// special case for platform.yaml
-	_, err := md.worktree.Filesystem.Open("platform.yaml")
+	_, err := md.Worktree.Filesystem.Open("platform.yaml")
 	if err == nil {
 		return
 	}
 
 	mdTxtPath := "SOURCES/modulemd.src.txt"
-	f, err := md.worktree.Filesystem.Open(mdTxtPath)
+	f, err := md.Worktree.Filesystem.Open(mdTxtPath)
 	if err != nil {
 		log.Fatalf("could not open modulemd file: %v", err)
 	}
@@ -300,16 +198,16 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 		if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
 			repString := fmt.Sprintf("%s%ss-", pd.BranchPrefix, string(split[4][0]))
 			newString := fmt.Sprintf("%s%s-", pd.BranchPrefix, string(split[4][0]))
-			pushBranch = strings.Replace(md.pushBranch, repString, newString, 1)
+			pushBranch = strings.Replace(md.PushBranch, repString, newString, 1)
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 2 {
-			pushBranch = md.pushBranch
+			pushBranch = md.PushBranch
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 3 {
 			// example: ant
 			pushBranch = fmt.Sprintf("%s%d-stream-%s", pd.BranchPrefix, pd.Version, split[2])
 		} else if strings.HasPrefix(rpm.Ref, "stream-") {
 			pushBranch = fmt.Sprintf("%s%s-stream-%s", pd.BranchPrefix, string(split[3][0]), split[1])
 		} else if strings.HasPrefix(rpm.Ref, "rhel-") {
-			pushBranch = md.pushBranch
+			pushBranch = md.PushBranch
 		} else {
 			log.Fatal("could not recognize modulemd ref")
 		}
@@ -317,7 +215,7 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 		rpm.Ref = pushBranch
 		tipHash = getTipStream(pd, name, pushBranch)
 
-		err = module.Marshal(md.worktree.Filesystem, mdTxtPath)
+		err = module.Marshal(md.Worktree.Filesystem, mdTxtPath)
 		if err != nil {
 			log.Fatalf("could not marshal modulemd: %v", err)
 		}
@@ -325,13 +223,13 @@ func patchModuleYaml(pd *ProcessData, md *modeData) {
 		rpm.Ref = tipHash
 	}
 
-	rootModule := fmt.Sprintf("%s.yaml", md.rpmFile.Name())
-	err = module.Marshal(md.worktree.Filesystem, rootModule)
+	rootModule := fmt.Sprintf("%s.yaml", md.RpmFile.Name())
+	err = module.Marshal(md.Worktree.Filesystem, rootModule)
 	if err != nil {
 		log.Fatalf("could not marshal root modulemd: %v", err)
 	}
 
-	_, err = md.worktree.Add(rootModule)
+	_, err = md.Worktree.Add(rootModule)
 	if err != nil {
 		log.Fatalf("could not add root modulemd: %v", err)
 	}

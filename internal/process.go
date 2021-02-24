@@ -4,16 +4,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob"
-	"github.com/cavaliercoder/go-rpm"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/go-git/go-git/v5/storage/memory"
-	"hash"
 	"io/ioutil"
 	"log"
 	"os"
@@ -25,54 +22,17 @@ import (
 
 var tagImportRegex *regexp.Regexp
 
-type ProcessData struct {
-	RpmLocation        string
-	UpstreamPrefix     string
-	SshKeyLocation     string
-	SshUser            string
-	Version            int
-	GitCommitterName   string
-	GitCommitterEmail  string
-	Mode               int
-	ModulePrefix       string
-	ImportBranchPrefix string
-	BranchPrefix       string
-	Authenticator      *ssh.PublicKeys
-	Importer           ImportMode
-	BlobStorage        blob.Storage
-	NoDupMode          bool
-	ModuleMode         bool
-}
-
-type ignoredSource struct {
-	name         string
-	hashFunction hash.Hash
-	expired      bool
-}
-
-type modeData struct {
-	repo            *git.Repository
-	worktree        *git.Worktree
-	rpmFile         *rpm.PackageFile
-	fileWrites      map[string][]byte
-	tagBranch       string
-	pushBranch      string
-	branches        []string
-	sourcesToIgnore []*ignoredSource
-	blobCache       map[string][]byte
-}
-
 // ProcessRPM checks the RPM specs and discards any remote files
 // This functions also sorts files into directories
 // .spec files goes into -> SPECS
 // metadata files goes to root
 // source files goes into -> SOURCES
 // all files that are remote goes into .gitignore
-// all ignored files' hash goes into .{name}.metadata
-func ProcessRPM(pd *ProcessData) {
+// all ignored files' hash goes into .{Name}.metadata
+func ProcessRPM(pd *data.ProcessData) {
 	tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	md := pd.Importer.RetrieveSource(pd)
-	md.blobCache = map[string][]byte{}
+	md.BlobCache = map[string][]byte{}
 
 	remotePrefix := "rpms"
 	if pd.ModuleMode {
@@ -89,9 +49,9 @@ func ProcessRPM(pd *ProcessData) {
 	if pd.NoDupMode {
 		repo, err := git.Init(memory.NewStorage(), memfs.New())
 		if err != nil {
-			log.Fatalf("could not init git repo: %v", err)
+			log.Fatalf("could not init git Repo: %v", err)
 		}
-		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, md.rpmFile.Name())
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, md.RpmFile.Name())
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 
 		remote, err := repo.CreateRemote(&config.RemoteConfig{
@@ -118,38 +78,42 @@ func ProcessRPM(pd *ProcessData) {
 		}
 	}
 
-	sourceRepo := *md.repo
-	sourceWorktree := *md.worktree
+	sourceRepo := *md.Repo
+	sourceWorktree := *md.Worktree
 
-	for _, branch := range md.branches {
-		md.repo = &sourceRepo
-		md.worktree = &sourceWorktree
-		md.tagBranch = branch
-		for _, source := range md.sourcesToIgnore {
-			source.expired = true
+	if pd.SingleTag != "" {
+		md.Branches = []string{fmt.Sprintf("refs/tags/%s", pd.SingleTag)}
+	}
+
+	for _, branch := range md.Branches {
+		md.Repo = &sourceRepo
+		md.Worktree = &sourceWorktree
+		md.TagBranch = branch
+		for _, source := range md.SourcesToIgnore {
+			source.Expired = true
 		}
 
-		if strings.Contains(md.tagBranch, "-beta") {
+		if strings.Contains(md.TagBranch, "-beta") {
 			continue
 		}
 
-		rpmFile := md.rpmFile
-		// create new repo for final dist
-		repo, err := git.Init(memory.NewStorage(), memfs.New())
+		rpmFile := md.RpmFile
+		// create new Repo for final dist
+		repo, err := git.Init(memory.NewStorage(), pd.FsCreator())
 		if err != nil {
-			log.Fatalf("could not create new dist repo: %v", err)
+			log.Fatalf("could not create new dist Repo: %v", err)
 		}
 		w, err := repo.Worktree()
 		if err != nil {
-			log.Fatalf("could not get dist worktree: %v", err)
+			log.Fatalf("could not get dist Worktree: %v", err)
 		}
 
 		var matchString string
-		if !tagImportRegex.MatchString(md.tagBranch) {
+		if !tagImportRegex.MatchString(md.TagBranch) {
 			if pd.ModuleMode {
 				prefix := fmt.Sprintf("refs/heads/%s%d", pd.ImportBranchPrefix, pd.Version)
-				if strings.HasPrefix(md.tagBranch, prefix) {
-					replace := strings.Replace(md.tagBranch, "refs/heads/", "", 1)
+				if strings.HasPrefix(md.TagBranch, prefix) {
+					replace := strings.Replace(md.TagBranch, "refs/heads/", "", 1)
 					matchString = fmt.Sprintf("refs/tags/imports/%s/%s", replace, filepath.Base(pd.RpmLocation))
 					log.Printf("using match string: %s", matchString)
 				}
@@ -158,11 +122,11 @@ func ProcessRPM(pd *ProcessData) {
 				continue
 			}
 		} else {
-			matchString = md.tagBranch
+			matchString = md.TagBranch
 		}
 
 		match := tagImportRegex.FindStringSubmatch(matchString)
-		md.pushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
+		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 
 		shouldContinue := true
@@ -179,7 +143,7 @@ func ProcessRPM(pd *ProcessData) {
 		// create a new remote
 		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, rpmFile.Name())
 		log.Printf("using remote: %s", remoteUrl)
-		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.pushBranch, md.pushBranch))
+		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.PushBranch, md.PushBranch))
 		log.Printf("using refspec: %s", refspec)
 
 		_, err = repo.CreateRemote(&config.RemoteConfig{
@@ -197,7 +161,7 @@ func ProcessRPM(pd *ProcessData) {
 			Auth:       pd.Authenticator,
 		})
 
-		refName := plumbing.NewBranchReferenceName(md.pushBranch)
+		refName := plumbing.NewBranchReferenceName(md.PushBranch)
 		log.Printf("set reference to ref: %s", refName)
 
 		if err != nil {
@@ -207,7 +171,7 @@ func ProcessRPM(pd *ProcessData) {
 			}
 		} else {
 			err = w.Checkout(&git.CheckoutOptions{
-				Branch: plumbing.NewRemoteReferenceName("origin", md.pushBranch),
+				Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
 				Force:  true,
 			})
 			if err != nil {
@@ -217,9 +181,9 @@ func ProcessRPM(pd *ProcessData) {
 
 		pd.Importer.WriteSource(pd, md)
 
-		copyFromFs(md.worktree.Filesystem, w.Filesystem, ".")
-		md.repo = repo
-		md.worktree = w
+		copyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
+		md.Repo = repo
+		md.Worktree = w
 
 		if pd.ModuleMode {
 			patchModuleYaml(pd, md)
@@ -227,17 +191,17 @@ func ProcessRPM(pd *ProcessData) {
 			executePatchesRpm(pd, md)
 		}
 
-		// get ignored files hash and add to .{name}.metadata
+		// get ignored files hash and add to .{Name}.metadata
 		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())
 		metadata, err := w.Filesystem.Create(metadataFile)
 		if err != nil {
 			log.Fatalf("could not create metadata file: %v", err)
 		}
-		for _, source := range md.sourcesToIgnore {
-			sourcePath := source.name
+		for _, source := range md.SourcesToIgnore {
+			sourcePath := source.Name
 
 			_, err := w.Filesystem.Stat(sourcePath)
-			if source.expired || err != nil {
+			if source.Expired || err != nil {
 				continue
 			}
 
@@ -250,12 +214,12 @@ func ProcessRPM(pd *ProcessData) {
 				log.Fatalf("could not read the whole of ignored source file: %v", err)
 			}
 
-			source.hashFunction.Reset()
-			_, err = source.hashFunction.Write(sourceFileBts)
+			source.HashFunction.Reset()
+			_, err = source.HashFunction.Write(sourceFileBts)
 			if err != nil {
 				log.Fatalf("could not write bytes to hash function: %v", err)
 			}
-			checksum := hex.EncodeToString(source.hashFunction.Sum(nil))
+			checksum := hex.EncodeToString(source.HashFunction.Sum(nil))
 			checksumLine := fmt.Sprintf("%s %s\n", checksum, sourcePath)
 			_, err = metadata.Write([]byte(checksumLine))
 			if err != nil {
@@ -266,7 +230,7 @@ func ProcessRPM(pd *ProcessData) {
 			if strContains(alreadyUploadedBlobs, path) {
 				continue
 			}
-			if !pd.BlobStorage.Exists(path) {
+			if !pd.BlobStorage.Exists(path) && !pd.NoStorageUpload {
 				pd.BlobStorage.Write(path, sourceFileBts)
 				log.Printf("wrote %s to blob storage", path)
 			}
@@ -317,11 +281,11 @@ func ProcessRPM(pd *ProcessData) {
 		} else {
 			log.Printf("tip %s", head.String())
 			hashes = append(hashes, head.Hash())
-			refOrigin := "refs/heads/" + md.pushBranch
+			refOrigin := "refs/heads/" + md.PushBranch
 			pushRefspecs = append(pushRefspecs, config.RefSpec(fmt.Sprintf("HEAD:%s", refOrigin)))
 		}
 
-		// we are now finished with the tree and are going to push it to the src repo
+		// we are now finished with the tree and are going to push it to the src Repo
 		// create import commit
 		commit, err := w.Commit("import "+pd.Importer.ImportName(pd, md), &git.CommitOptions{
 			Author: &object.Signature{
@@ -348,7 +312,7 @@ func ProcessRPM(pd *ProcessData) {
 				Email: pd.GitCommitterEmail,
 				When:  time.Now(),
 			},
-			Message: "import " + md.tagBranch + " from " + pd.RpmLocation,
+			Message: "import " + md.TagBranch + " from " + pd.RpmLocation,
 			SignKey: nil,
 		})
 		if err != nil {
@@ -368,7 +332,7 @@ func ProcessRPM(pd *ProcessData) {
 		}
 
 		hashString := obj.Hash.String()
-		latestHashForBranch[md.pushBranch] = hashString
+		latestHashForBranch[md.PushBranch] = hashString
 	}
 
 	err := json.NewEncoder(os.Stdout).Encode(latestHashForBranch)

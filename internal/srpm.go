@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/cavaliercoder/go-cpio"
 	"github.com/cavaliercoder/go-rpm"
 	"github.com/go-git/go-billy/v5/memfs"
@@ -20,7 +21,7 @@ import (
 
 type SrpmMode struct{}
 
-func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
+func (s *SrpmMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	cmd := exec.Command("rpm2cpio", pd.RpmLocation)
 	cpioBytes, err := cmd.Output()
 	if err != nil {
@@ -30,7 +31,7 @@ func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
 	// create in memory git repository
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not init git repo: %v", err)
+		log.Fatalf("could not init git Repo: %v", err)
 	}
 
 	// read the rpm in cpio format
@@ -56,7 +57,7 @@ func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
 
 	w, err := repo.Worktree()
 	if err != nil {
-		log.Fatalf("could not get worktree: %v", err)
+		log.Fatalf("could not get Worktree: %v", err)
 	}
 
 	// create structure
@@ -78,29 +79,29 @@ func (s *SrpmMode) RetrieveSource(pd *ProcessData) *modeData {
 		log.Fatalf("could not read package, invalid?: %v", err)
 	}
 
-	var sourcesToIgnore []*ignoredSource
+	var sourcesToIgnore []*data.IgnoredSource
 	for _, source := range rpmFile.Source() {
 		if strings.Contains(source, ".tar") {
-			sourcesToIgnore = append(sourcesToIgnore, &ignoredSource{
-				name:         source,
-				hashFunction: sha256.New(),
+			sourcesToIgnore = append(sourcesToIgnore, &data.IgnoredSource{
+				Name:         source,
+				HashFunction: sha256.New(),
 			})
 		}
 	}
 
 	branch := fmt.Sprintf("%s%d", pd.BranchPrefix, pd.Version)
-	return &modeData{
-		repo:            repo,
-		worktree:        w,
-		rpmFile:         rpmFile,
-		fileWrites:      fileWrites,
-		branches:        []string{branch},
-		sourcesToIgnore: sourcesToIgnore,
+	return &data.ModeData{
+		Repo:            repo,
+		Worktree:        w,
+		RpmFile:         rpmFile,
+		FileWrites:      fileWrites,
+		Branches:        []string{branch},
+		SourcesToIgnore: sourcesToIgnore,
 	}
 }
 
-func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
-	for fileName, contents := range md.fileWrites {
+func (s *SrpmMode) WriteSource(_ *data.ProcessData, md *data.ModeData) {
+	for fileName, contents := range md.FileWrites {
 		var newPath string
 		if filepath.Ext(fileName) == ".spec" {
 			newPath = filepath.Join("SPECS", fileName)
@@ -109,7 +110,7 @@ func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
 		}
 
 		mode := os.FileMode(0666)
-		for _, file := range md.rpmFile.Files() {
+		for _, file := range md.RpmFile.Files() {
 			if file.Name() == fileName {
 				mode = file.Mode()
 			}
@@ -117,7 +118,7 @@ func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
 
 		// add the file to the virtual filesystem
 		// we will move it to correct destination later
-		f, err := md.worktree.Filesystem.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode)
+		f, err := md.Worktree.Filesystem.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode)
 		if err != nil {
 			log.Fatalf("could not create file %s: %v", fileName, err)
 		}
@@ -130,22 +131,22 @@ func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
 		_ = f.Close()
 
 		// don't add ignored file to git
-		if ignoredContains(md.sourcesToIgnore, fileName) {
+		if ignoredContains(md.SourcesToIgnore, fileName) {
 			continue
 		}
 
-		_, err = md.worktree.Add(newPath)
+		_, err = md.Worktree.Add(newPath)
 		if err != nil {
 			log.Fatalf("could not add source file: %v", err)
 		}
 	}
 
 	// add sources to ignore (remote sources)
-	gitIgnore, err := md.worktree.Filesystem.Create(".gitignore")
+	gitIgnore, err := md.Worktree.Filesystem.Create(".gitignore")
 	if err != nil {
 		log.Fatalf("could not create .gitignore: %v", err)
 	}
-	for _, ignore := range md.sourcesToIgnore {
+	for _, ignore := range md.SourcesToIgnore {
 		line := fmt.Sprintf("SOURCES/%s\n", ignore)
 		_, err := gitIgnore.Write([]byte(line))
 		if err != nil {
@@ -158,8 +159,8 @@ func (s *SrpmMode) WriteSource(_ *ProcessData, md *modeData) {
 	}
 }
 
-func (s *SrpmMode) PostProcess(_ *modeData) {}
+func (s *SrpmMode) PostProcess(_ *data.ModeData) {}
 
-func (s *SrpmMode) ImportName(pd *ProcessData, _ *modeData) string {
+func (s *SrpmMode) ImportName(pd *data.ProcessData, _ *data.ModeData) string {
 	return filepath.Base(pd.RpmLocation)
 }

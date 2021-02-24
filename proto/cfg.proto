@@ -62,7 +62,7 @@ message SpecChange {
       Patch = 2;
     }
     // File name
-    string file = 1;
+    string name = 1;
     // File type
     Type type = 2;
 
@@ -75,9 +75,35 @@ message SpecChange {
       bool delete = 4;
     }
   }
-  oneof operation {
-    FileOperation file_operation = 1;
+  // ChangelogOperation adds a new changelog entry
+  message ChangelogOperation {
+    string author_name = 1;
+    string author_email = 2;
+    repeated string message = 3;
   }
+  // SearchAndReplaceOperation replaces substring with value
+  // in a specified field
+  message SearchAndReplaceOperation {
+    oneof identifier {
+      // replace occurrences in field value
+      string field = 1;
+      // replace occurrences in any line
+      bool any = 2;
+      // replace occurrences that starts with find
+      bool starts_with = 3;
+      // replace occurrences that ends with find
+      bool ends_with = 4;
+    }
+    string find = 5;
+    string replace = 6;
+    // How many occurences to replace.
+    // Set to -1 for all
+    sint32 n = 7;
+  }
+
+  repeated FileOperation file = 1;
+  repeated ChangelogOperation changelog = 2;
+  repeated SearchAndReplaceOperation search_and_replace = 3;
 }
 
 message Patch {
@@ -95,6 +121,6 @@ message Cfg {
   repeated Delete delete = 2;
   repeated Add add = 3;
   repeated Lookaside lookaside = 4;
-  repeated SpecChange spec_change = 5;
+  SpecChange spec_change = 5;
   repeated Patch patch = 6;
 }

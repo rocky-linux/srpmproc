@@ -6,7 +6,7 @@ import (
 
 // TODO: ugly hack, should create an interface
 // since GitMode does not parse an RPM file, we just mimick
-// the headers of an actual file to reuse rpmFile.Name()
+// the headers of an actual file to reuse RpmFile.Name()
 func createPackageFile(name string) *rpm.PackageFile {
 	return &rpm.PackageFile{
 		Lead: rpm.Lead{},

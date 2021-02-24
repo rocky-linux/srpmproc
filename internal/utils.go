@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/go-git/go-billy/v5"
 	"hash"
 	"io"
@@ -47,9 +48,9 @@ func copyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
 	}
 }
 
-func ignoredContains(a []*ignoredSource, b string) bool {
+func ignoredContains(a []*data.IgnoredSource, b string) bool {
 	for _, val := range a {
-		if val.name == b {
+		if val.Name == b {
 			return true
 		}
 	}

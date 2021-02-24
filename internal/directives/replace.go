@@ -3,13 +3,14 @@ package directives
 import (
 	"errors"
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
 	"github.com/go-git/go-git/v5"
 	"io/ioutil"
 	"os"
 )
 
-func replace(cfg *srpmprocpb.Cfg, patchTree *git.Worktree, pushTree *git.Worktree) error {
+func replace(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, replace := range cfg.Replace {
 		filePath := checkAddPrefix(replace.File)
 		stat, err := pushTree.Filesystem.Stat(filePath)

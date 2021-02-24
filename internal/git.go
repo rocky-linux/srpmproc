@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -38,15 +39,15 @@ func (p remoteTargetSlice) Swap(i, j int) {
 
 type GitMode struct{}
 
-func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
+func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not init git repo: %v", err)
+		log.Fatalf("could not init git Repo: %v", err)
 	}
 
 	w, err := repo.Worktree()
 	if err != nil {
-		log.Fatalf("could not get worktree: %v", err)
+		log.Fatalf("could not get Worktree: %v", err)
 	}
 
 	refspec := config.RefSpec("+refs/heads/*:refs/remotes/*")
@@ -116,17 +117,17 @@ func (g *GitMode) RetrieveSource(pd *ProcessData) *modeData {
 		sortedBranches = append(sortedBranches, branch.remote)
 	}
 
-	return &modeData{
-		repo:       repo,
-		worktree:   w,
-		rpmFile:    createPackageFile(filepath.Base(pd.RpmLocation)),
-		fileWrites: nil,
-		branches:   sortedBranches,
+	return &data.ModeData{
+		Repo:       repo,
+		Worktree:   w,
+		RpmFile:    createPackageFile(filepath.Base(pd.RpmLocation)),
+		FileWrites: nil,
+		Branches:   sortedBranches,
 	}
 }
 
-func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
-	remote, err := md.repo.Remote("upstream")
+func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
+	remote, err := md.Repo.Remote("upstream")
 	if err != nil {
 		log.Fatalf("could not get upstream remote: %v", err)
 	}
@@ -134,13 +135,13 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 	var refspec config.RefSpec
 	var branchName string
 
-	if strings.HasPrefix(md.tagBranch, "refs/heads") {
-		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.tagBranch, md.tagBranch))
-		branchName = strings.TrimPrefix(md.tagBranch, "refs/heads/")
+	if strings.HasPrefix(md.TagBranch, "refs/heads") {
+		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
+		branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
 	} else {
-		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
+		match := tagImportRegex.FindStringSubmatch(md.TagBranch)
 		branchName = match[2]
-		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.tagBranch))
+		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
 	}
 	log.Printf("checking out upstream refspec %s", refspec)
 	err = remote.Fetch(&git.FetchOptions{
@@ -153,20 +154,20 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 		log.Fatalf("could not fetch upstream: %v", err)
 	}
 
-	err = md.worktree.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.ReferenceName(md.tagBranch),
+	err = md.Worktree.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.ReferenceName(md.TagBranch),
 		Force:  true,
 	})
 	if err != nil {
 		log.Fatalf("could not checkout source from git: %v", err)
 	}
 
-	_, err = md.worktree.Add(".")
+	_, err = md.Worktree.Add(".")
 	if err != nil {
-		log.Fatalf("could not add worktree: %v", err)
+		log.Fatalf("could not add Worktree: %v", err)
 	}
 
-	metadataFile, err := md.worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.rpmFile.Name()))
+	metadataFile, err := md.Worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.RpmFile.Name()))
 	if err != nil {
 		log.Printf("warn: could not open metadata file, so skipping: %v", err)
 		return
@@ -194,16 +195,16 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 
 		var body []byte
 
-		if md.blobCache[hash] != nil {
-			body = md.blobCache[hash]
+		if md.BlobCache[hash] != nil {
+			body = md.BlobCache[hash]
 			log.Printf("retrieving %s from cache", hash)
 		} else {
 			fromBlobStorage := pd.BlobStorage.Read(hash)
-			if fromBlobStorage != nil {
+			if fromBlobStorage != nil && !pd.NoStorageDownload {
 				body = fromBlobStorage
 				log.Printf("downloading %s from blob storage", hash)
 			} else {
-				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.rpmFile.Name(), branchName, hash)
+				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.RpmFile.Name(), branchName, hash)
 				log.Printf("downloading %s", url)
 
 				req, err := http.NewRequest("GET", url, nil)
@@ -227,10 +228,10 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 				}
 			}
 
-			md.blobCache[hash] = body
+			md.BlobCache[hash] = body
 		}
 
-		f, err := md.worktree.Filesystem.Create(path)
+		f, err := md.Worktree.Filesystem.Create(path)
 		if err != nil {
 			log.Fatalf("could not open file pointer: %v", err)
 		}
@@ -240,9 +241,9 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 			log.Fatal("checksum in metadata does not match dist-git file")
 		}
 
-		md.sourcesToIgnore = append(md.sourcesToIgnore, &ignoredSource{
-			name:         path,
-			hashFunction: hasher,
+		md.SourcesToIgnore = append(md.SourcesToIgnore, &data.IgnoredSource{
+			Name:         path,
+			HashFunction: hasher,
 		})
 
 		_, err = f.Write(body)
@@ -253,28 +254,28 @@ func (g *GitMode) WriteSource(pd *ProcessData, md *modeData) {
 	}
 }
 
-func (g *GitMode) PostProcess(md *modeData) {
-	for _, source := range md.sourcesToIgnore {
-		_, err := md.worktree.Filesystem.Stat(source.name)
+func (g *GitMode) PostProcess(md *data.ModeData) {
+	for _, source := range md.SourcesToIgnore {
+		_, err := md.Worktree.Filesystem.Stat(source.Name)
 		if err == nil {
-			err := md.worktree.Filesystem.Remove(source.name)
+			err := md.Worktree.Filesystem.Remove(source.Name)
 			if err != nil {
 				log.Fatalf("could not remove dist-git file: %v", err)
 			}
 		}
 	}
 
-	_, err := md.worktree.Add(".")
+	_, err := md.Worktree.Add(".")
 	if err != nil {
 		log.Fatalf("could not add git sources: %v", err)
 	}
 }
 
-func (g *GitMode) ImportName(_ *ProcessData, md *modeData) string {
-	if tagImportRegex.MatchString(md.tagBranch) {
-		match := tagImportRegex.FindStringSubmatch(md.tagBranch)
+func (g *GitMode) ImportName(_ *data.ProcessData, md *data.ModeData) string {
+	if tagImportRegex.MatchString(md.TagBranch) {
+		match := tagImportRegex.FindStringSubmatch(md.TagBranch)
 		return match[3]
 	}
 
-	return strings.TrimPrefix(md.tagBranch, "refs/heads/")
+	return strings.TrimPrefix(md.TagBranch, "refs/heads/")
 }
