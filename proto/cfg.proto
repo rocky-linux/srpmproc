@@ -100,10 +100,16 @@ message SpecChange {
     // Set to -1 for all
     sint32 n = 7;
   }
+  // AppendOperation appends a value to specified field
+  message AppendOperation {
+    string field = 1;
+    string value = 2;
+  }
 
   repeated FileOperation file = 1;
   repeated ChangelogOperation changelog = 2;
   repeated SearchAndReplaceOperation search_and_replace = 3;
+  repeated AppendOperation append = 4;
 }
 
 message Patch {

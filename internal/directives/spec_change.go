@@ -216,6 +216,12 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				}
 			}
 
+			for _, appendOp := range cfg.SpecChange.Append {
+				if field == appendOp.Field {
+					value = value + appendOp.Value
+				}
+			}
+
 			spaces := calculateSpaces(longestField, len(field))
 
 			err := sourcePatchOperationInLoop(&sourcePatchOperationInLoopRequest{
