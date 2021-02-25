@@ -271,6 +271,10 @@ func ProcessRPM(pd *data.ProcessData) {
 			}
 		}
 
+		if pd.TmpFsMode {
+			continue
+		}
+
 		var hashes []plumbing.Hash
 		var pushRefspecs []config.RefSpec
 

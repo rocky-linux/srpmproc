@@ -101,12 +101,16 @@ func mn(_ *cobra.Command, _ []string) {
 	}
 
 	if tmpFsMode {
-		tmpDir, err := ioutil.TempDir(os.TempDir(), "srpmproc-*")
+		tmpBaseDir, err := ioutil.TempDir(os.TempDir(), "srpmproc-*")
 		if err != nil {
 			log.Fatalf("could not create temp dir: %v", err)
 		}
-		log.Printf("using temp dir: %s", tmpDir)
+		log.Printf("using temp dir: %s", tmpBaseDir)
 		fsCreator = func() billy.Filesystem {
+			tmpDir, err := ioutil.TempDir(tmpBaseDir, "*")
+			if err != nil {
+				log.Fatalf("could not create temp dir: %v", err)
+			}
 			return osfs.New(tmpDir)
 		}
 	}
