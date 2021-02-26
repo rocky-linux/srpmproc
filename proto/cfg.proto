@@ -44,10 +44,16 @@ message Add {
 // If tar is true, the files will be put into a tarball and gzipped
 message Lookaside {
   // Required - List of files that should be stored in blob storage
-  repeated string files = 1;
+  repeated string file = 1;
 
   // Whether files should be put into a tarball and gzipped
   bool tar = 2;
+
+  // Name of tar file, only used and required if tar is true
+  string archive_name = 3;
+
+  // Whether if files should be retrieved from patch tree
+  bool from_patch_tree = 4;
 }
 
 // SpecChange directive makes it possible to execute certain
@@ -100,7 +106,7 @@ message SpecChange {
     // Set to -1 for all
     sint32 n = 7;
   }
-  // AppendOperation appends a value to specified field
+  // AppendOperation appends a value to specified field or section
   message AppendOperation {
     string field = 1;
     string value = 2;
