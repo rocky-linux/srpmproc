@@ -57,11 +57,13 @@ func sourcePatchOperationInLoop(req *sourcePatchOperationInLoopRequest) error {
 				break
 			}
 		}
-		sourceNum, err := strconv.Atoi(strings.Split(req.field, req.expectedField)[1])
-		if err != nil {
-			return errors.New(fmt.Sprintf("INVALID_%s_NUM", strings.ToUpper(req.expectedField)))
+		if req.field != req.expectedField {
+			sourceNum, err := strconv.Atoi(strings.Split(req.field, req.expectedField)[1])
+			if err != nil {
+				return errors.New(fmt.Sprintf("INVALID_%s_NUM:%s", strings.ToUpper(req.expectedField), req.field))
+			}
+			*req.lastNum = sourceNum
 		}
-		*req.lastNum = sourceNum
 	}
 
 	return nil

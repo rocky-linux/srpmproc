@@ -68,7 +68,7 @@ func lookaside(cfg *srpmprocpb.Cfg, _ *data.ProcessData, md *data.ModeData, patc
 				}
 			} else {
 				if directive.FromPatchTree {
-					pushF, err := pushTree.Filesystem.OpenFile(filepath.Join("SOURCES", file), os.O_CREATE|os.O_TRUNC|os.O_RDWR, stat.Mode())
+					pushF, err := pushTree.Filesystem.OpenFile(filepath.Join("SOURCES", filepath.Base(file)), os.O_CREATE|os.O_TRUNC|os.O_RDWR, stat.Mode())
 					if err != nil {
 						return errors.New(fmt.Sprintf("COULD_NOT_CREATE_FILE_IN_PUSH_TREE:%s", file))
 					}
