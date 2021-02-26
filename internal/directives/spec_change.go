@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+const (
+	sectionChangelog = "%changelog"
+)
+
 type sourcePatchOperationInLoopRequest struct {
 	cfg           *srpmprocpb.Cfg
 	field         string
@@ -98,12 +102,12 @@ func searchAndReplaceLine(line string, sar []*srpmprocpb.SpecChange_SearchAndRep
 			line = strings.Replace(line, searchAndReplace.Find, searchAndReplace.Replace, int(searchAndReplace.N))
 			break
 		case *srpmprocpb.SpecChange_SearchAndReplaceOperation_StartsWith:
-			if strings.HasPrefix(line, searchAndReplace.Find) {
+			if strings.HasPrefix(strings.TrimSpace(line), searchAndReplace.Find) {
 				line = strings.Replace(line, searchAndReplace.Find, searchAndReplace.Replace, int(searchAndReplace.N))
 			}
 			break
 		case *srpmprocpb.SpecChange_SearchAndReplaceOperation_EndsWith:
-			if strings.HasSuffix(line, searchAndReplace.Find) {
+			if strings.HasSuffix(strings.TrimSpace(line), searchAndReplace.Find) {
 				line = strings.Replace(line, searchAndReplace.Find, searchAndReplace.Replace, int(searchAndReplace.N))
 			}
 			break
@@ -149,20 +153,27 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	lines := strings.Split(specStr, "\n")
 
 	var newLines []string
+	futureAdditions := map[int]string{}
 	lastSourceNum := 0
 	lastPatchNum := 0
 	inSources := false
 	inPatches := false
-	inChangelog := false
+	inSection := ""
 	lastSource := ""
 	lastPatch := ""
 
 	version := ""
-	importNameSplit := strings.SplitN(pd.Importer.ImportName(pd, md), "-", 2)
+	importName := strings.Replace(pd.Importer.ImportName(pd, md), md.RpmFile.Name(), "1", 1)
+	importNameSplit := strings.SplitN(importName, "-", 2)
 	if len(importNameSplit) == 2 {
 		versionSplit := strings.SplitN(importNameSplit[1], ".el", 2)
 		if len(versionSplit) == 2 {
 			version = versionSplit[0]
+		} else {
+			versionSplit := strings.SplitN(importNameSplit[1], ".module", 2)
+			if len(versionSplit) == 2 {
+				version = versionSplit[0]
+			}
 		}
 	}
 
@@ -185,10 +196,16 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 		}
 	}
 
-	for _, line := range lines {
+	for lineNum, line := range lines {
 		inLoopSourceNum := lastSourceNum
 		inLoopPatchNum := lastPatchNum
 		prefixLine := strings.TrimSpace(line)
+
+		for i, addition := range futureAdditions {
+			if lineNum == i {
+				newLines = append(newLines, addition)
+			}
+		}
 
 		if fieldValueRegex.MatchString(line) {
 			line = searchAndReplaceLine(line, cfg.SpecChange.SearchAndReplace)
@@ -219,6 +236,10 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 			for _, appendOp := range cfg.SpecChange.Append {
 				if field == appendOp.Field {
 					value = value + appendOp.Value
+
+					if field == "Release" {
+						version = version + appendOp.Value
+					}
 				}
 			}
 
@@ -292,10 +313,10 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 			if executed && !strings.Contains(specStr, "%changelog") {
 				newLines = append(newLines, "")
 				newLines = append(newLines, "%changelog")
-				inChangelog = true
+				inSection = sectionChangelog
 			}
 
-			if inChangelog {
+			if inSection == sectionChangelog {
 				now := time.Now().Format("Mon Jan 02 2006")
 				for _, changelog := range cfg.SpecChange.Changelog {
 					newLines = append(newLines, fmt.Sprintf("* %s %s <%s> - %s", now, changelog.AuthorName, changelog.AuthorEmail, version))
@@ -304,13 +325,35 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 					}
 					newLines = append(newLines, "")
 				}
-				inChangelog = false
+				inSection = ""
 			} else {
 				line = searchAndReplaceLine(line, cfg.SpecChange.SearchAndReplace)
 			}
 
-			if strings.HasPrefix(prefixLine, "%changelog") {
-				inChangelog = true
+			if strings.HasPrefix(prefixLine, "%") {
+				inSection = prefixLine
+
+				for _, appendOp := range cfg.SpecChange.Append {
+					if inSection == appendOp.Field {
+						insertedLine := 0
+						for i, x := range lines[lineNum+1:] {
+							if strings.HasPrefix(strings.TrimSpace(x), "%") {
+								insertedLine = lineNum + i + 2
+								futureAdditions[insertedLine] = appendOp.Value
+								break
+							}
+						}
+						if insertedLine == 0 {
+							for i, x := range lines[lineNum+1:] {
+								if strings.TrimSpace(x) == "" {
+									insertedLine = lineNum + i + 2
+									futureAdditions[insertedLine] = appendOp.Value
+									break
+								}
+							}
+						}
+					}
+				}
 			}
 
 			newLines = append(newLines, line)
