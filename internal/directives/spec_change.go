@@ -26,7 +26,7 @@ type sourcePatchOperationInLoopRequest struct {
 	value         *string
 	longestField  int
 	lastNum       *int
-	in            *bool
+	in            *string
 	expectedField string
 	operation     srpmprocpb.SpecChange_FileOperation_Type
 }
@@ -37,7 +37,7 @@ type sourcePatchOperationAfterLoopRequest struct {
 	lastNum       *int
 	longestField  int
 	newLines      *[]string
-	in            *bool
+	in            *string
 	expectedField string
 	operation     srpmprocpb.SpecChange_FileOperation_Type
 }
@@ -70,7 +70,7 @@ func sourcePatchOperationInLoop(req *sourcePatchOperationInLoopRequest) error {
 }
 
 func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (bool, error) {
-	if req.inLoopNum == *req.lastNum && *req.in {
+	if req.inLoopNum == *req.lastNum && *req.in == req.expectedField {
 		for _, file := range req.cfg.SpecChange.File {
 			if file.Type != req.operation {
 				continue
@@ -85,7 +85,7 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 				break
 			}
 		}
-		*req.in = false
+		*req.in = ""
 
 		return true, nil
 	}
@@ -117,6 +117,25 @@ func searchAndReplaceLine(line string, sar []*srpmprocpb.SpecChange_SearchAndRep
 	}
 
 	return line
+}
+
+func isNextLineSection(lineNum int, lines []string) bool {
+	if len(lines)-1 > lineNum {
+		if strings.HasPrefix(strings.TrimSpace(lines[lineNum+1]), "%") {
+			return true
+		}
+
+		return false
+	}
+
+	return true
+}
+
+func setFASlice(futureAdditions map[int][]string, key int, addition string) {
+	if futureAdditions[key] == nil {
+		futureAdditions[key] = []string{}
+	}
+	futureAdditions[key] = append(futureAdditions[key], addition)
 }
 
 func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ *git.Worktree, pushTree *git.Worktree) error {
@@ -155,12 +174,12 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	lines := strings.Split(specStr, "\n")
 
 	var newLines []string
-	futureAdditions := map[int]string{}
+	futureAdditions := map[int][]string{}
+	newFieldMemory := map[string]map[string]int{}
 	lastSourceNum := 0
 	lastPatchNum := 0
-	inSources := false
-	inPatches := false
 	inSection := ""
+	inField := ""
 	lastSource := ""
 	lastPatch := ""
 
@@ -182,7 +201,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	fieldValueRegex := regexp.MustCompile("^[A-Z].+:")
 
 	longestField := 0
-	for _, line := range lines {
+	for lineNum, line := range lines {
 		if fieldValueRegex.MatchString(line) {
 			fieldValue := strings.SplitN(line, ":", 2)
 			field := strings.TrimSpace(fieldValue[0])
@@ -190,10 +209,32 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 
 			if strings.HasPrefix(field, "Source") {
 				lastSource = field
-			}
-
-			if strings.HasPrefix(field, "Patch") {
+			} else if strings.HasPrefix(field, "Patch") {
 				lastPatch = field
+			} else {
+				for _, nf := range cfg.SpecChange.NewField {
+					if field == nf.Key {
+						if newFieldMemory[field] == nil {
+							newFieldMemory[field] = map[string]int{}
+						}
+						newFieldMemory[field][nf.Value] = lineNum
+					}
+				}
+			}
+		}
+	}
+	for _, nf := range cfg.SpecChange.NewField {
+		if newFieldMemory[nf.Key] == nil {
+			newFieldMemory[nf.Key] = map[string]int{}
+			newFieldMemory[nf.Key][nf.Value] = 0
+		}
+	}
+
+	for field, nfm := range newFieldMemory {
+		for value, lineNum := range nfm {
+			if lineNum != 0 {
+				newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field)), value)
+				setFASlice(futureAdditions, lineNum+1, newLine)
 			}
 		}
 	}
@@ -203,9 +244,11 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 		inLoopPatchNum := lastPatchNum
 		prefixLine := strings.TrimSpace(line)
 
-		for i, addition := range futureAdditions {
+		for i, additions := range futureAdditions {
 			if lineNum == i {
-				newLines = append(newLines, addition)
+				for _, addition := range additions {
+					newLines = append(newLines, addition)
+				}
 			}
 		}
 
@@ -216,9 +259,9 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 			value := strings.TrimSpace(fieldValue[1])
 
 			if field == lastSource {
-				inSources = true
+				inField = "Source"
 			} else if field == lastPatch {
-				inPatches = true
+				inField = "Patch"
 			}
 
 			if field == "Version" && version == "" {
@@ -253,7 +296,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				value:         &value,
 				lastNum:       &lastSourceNum,
 				longestField:  longestField,
-				in:            &inSources,
+				in:            &inField,
 				expectedField: "Source",
 				operation:     srpmprocpb.SpecChange_FileOperation_Source,
 			})
@@ -267,7 +310,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				value:         &value,
 				longestField:  longestField,
 				lastNum:       &lastPatchNum,
-				in:            &inPatches,
+				in:            &inField,
 				expectedField: "Patch",
 				operation:     srpmprocpb.SpecChange_FileOperation_Patch,
 			})
@@ -286,7 +329,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				longestField:  longestField,
 				newLines:      &newLines,
 				expectedField: "Source",
-				in:            &inSources,
+				in:            &inField,
 				operation:     srpmprocpb.SpecChange_FileOperation_Source,
 			})
 			if err != nil {
@@ -295,7 +338,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 
 			if executed && !strings.Contains(specStr, "Patch") {
 				newLines = append(newLines, "")
-				inPatches = true
+				inField = "Patch"
 			}
 
 			executed, err = sourcePatchOperationAfterLoop(&sourcePatchOperationAfterLoopRequest{
@@ -305,11 +348,31 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				longestField:  longestField,
 				newLines:      &newLines,
 				expectedField: "Patch",
-				in:            &inPatches,
+				in:            &inField,
 				operation:     srpmprocpb.SpecChange_FileOperation_Patch,
 			})
 			if err != nil {
 				return err
+			}
+
+			if executed {
+				var innerNewLines []string
+				for field, nfm := range newFieldMemory {
+					for value, ln := range nfm {
+						newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field)), value)
+						if ln == 0 {
+							if isNextLineSection(lineNum, lines) {
+								innerNewLines = append(innerNewLines, newLine)
+							}
+						}
+					}
+				}
+				if len(innerNewLines) > 0 {
+					newLines = append(newLines, "")
+					for _, il := range innerNewLines {
+						newLines = append(newLines, il)
+					}
+				}
 			}
 
 			if executed && !strings.Contains(specStr, "%changelog") {
@@ -341,7 +404,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 						for i, x := range lines[lineNum+1:] {
 							if strings.HasPrefix(strings.TrimSpace(x), "%") {
 								insertedLine = lineNum + i + 2
-								futureAdditions[insertedLine] = appendOp.Value
+								setFASlice(futureAdditions, insertedLine, appendOp.Value)
 								break
 							}
 						}
@@ -349,7 +412,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 							for i, x := range lines[lineNum+1:] {
 								if strings.TrimSpace(x) == "" {
 									insertedLine = lineNum + i + 2
-									futureAdditions[insertedLine] = appendOp.Value
+									setFASlice(futureAdditions, insertedLine, appendOp.Value)
 									break
 								}
 							}

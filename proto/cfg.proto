@@ -111,11 +111,19 @@ message SpecChange {
     string field = 1;
     string value = 2;
   }
+  // NewFieldOperation adds a new kv to the spec
+  // The field will be grouped if other fields of same name exists
+  message NewFieldOperation {
+    // Key cannot be Source or Patch
+    string key = 1;
+    string value = 2;
+  }
 
   repeated FileOperation file = 1;
   repeated ChangelogOperation changelog = 2;
   repeated SearchAndReplaceOperation search_and_replace = 3;
   repeated AppendOperation append = 4;
+  repeated NewFieldOperation new_field = 5;
 }
 
 message Patch {
