@@ -71,13 +71,24 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 
 	var branches remoteTargetSlice
 
+	latestTags := map[string]*remoteTarget{}
+
 	tagAdd := func(tag *object.Tag) error {
 		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/%s%d", pd.ImportBranchPrefix, pd.Version)) {
-			log.Printf("tag: %s", tag.Name)
-			branches = append(branches, remoteTarget{
-				remote: fmt.Sprintf("refs/tags/%s", tag.Name),
-				when:   tag.Tagger.When,
-			})
+			refSpec := fmt.Sprintf("refs/tags/%s", tag.Name)
+			if tagImportRegex.MatchString(refSpec) {
+				match := tagImportRegex.FindStringSubmatch(refSpec)
+
+				exists := latestTags[match[2]]
+				if exists != nil && exists.when.After(tag.Tagger.When) {
+					return nil
+				}
+
+				latestTags[match[2]] = &remoteTarget{
+					remote: refSpec,
+					when:   tag.Tagger.When,
+				}
+			}
 		}
 		return nil
 	}
@@ -88,7 +99,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	}
 	_ = tagIter.ForEach(tagAdd)
 
-	if len(branches) == 0 {
+	if len(latestTags) == 0 {
 		list, err := remote.List(&git.ListOptions{})
 		if err != nil {
 			log.Fatalf("could not list upstream: %v", err)
@@ -108,6 +119,11 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 				Tagger: commit.Committer,
 			})
 		}
+	}
+
+	for _, branch := range latestTags {
+		log.Printf("tag: %s", strings.TrimPrefix(branch.remote, "refs/tags/"))
+		branches = append(branches, *branch)
 	}
 
 	sort.Sort(branches)
