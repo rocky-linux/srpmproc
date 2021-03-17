@@ -20,6 +20,10 @@ const (
 	sectionChangelog = "%changelog"
 )
 
+var (
+	sections = []string{"%description", "%prep", "%build", "%install", "%files", "%changelog"}
+)
+
 type sourcePatchOperationInLoopRequest struct {
 	cfg           *srpmprocpb.Cfg
 	field         string
@@ -78,9 +82,23 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 
 			switch file.Mode.(type) {
 			case *srpmprocpb.SpecChange_FileOperation_Add:
-				field := fmt.Sprintf("%s%d", req.expectedField, *req.lastNum+1)
+				fieldNum := *req.lastNum + 1
+				field := fmt.Sprintf("%s%d", req.expectedField, fieldNum)
 				spaces := calculateSpaces(req.longestField, len(field))
 				*req.newLines = append(*req.newLines, fmt.Sprintf("%s:%s%s", field, spaces, file.Name))
+
+				if req.expectedField == "Patch" && file.AddToPrep {
+					val := fmt.Sprintf("%%patch%d", fieldNum)
+					if file.NPath > 0 {
+						val = fmt.Sprintf("%s -p%d", val, file.NPath)
+					}
+
+					req.cfg.SpecChange.Append = append(req.cfg.SpecChange.Append, &srpmprocpb.SpecChange_AppendOperation{
+						Field: "%prep",
+						Value: val,
+					})
+				}
+
 				*req.lastNum++
 				break
 			}
@@ -136,6 +154,16 @@ func setFASlice(futureAdditions map[int][]string, key int, addition string) {
 		futureAdditions[key] = []string{}
 	}
 	futureAdditions[key] = append(futureAdditions[key], addition)
+}
+
+func strSliceContains(slice []string, str string) bool {
+	for _, x := range slice {
+		if str == x {
+			return true
+		}
+	}
+
+	return false
 }
 
 func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ *git.Worktree, pushTree *git.Worktree) error {
@@ -402,8 +430,8 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 					if inSection == appendOp.Field {
 						insertedLine := 0
 						for i, x := range lines[lineNum+1:] {
-							if strings.HasPrefix(strings.TrimSpace(x), "%") {
-								insertedLine = lineNum + i + 2
+							if strSliceContains(sections, strings.TrimSpace(x)) {
+								insertedLine = lineNum + i
 								setFASlice(futureAdditions, insertedLine, appendOp.Value)
 								break
 							}

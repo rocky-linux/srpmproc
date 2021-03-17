@@ -80,6 +80,10 @@ message SpecChange {
       // Use the `Delete` directive for that
       bool delete = 4;
     }
+
+    // Only works for patch type
+    bool add_to_prep = 5;
+    int32 n_path = 6;
   }
   // ChangelogOperation adds a new changelog entry
   message ChangelogOperation {

@@ -75,7 +75,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 		log.Fatalf("could not get dist Worktree: %v", err)
 	}
 
-	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, md.RpmFile.Name())
+	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, gitlabify(md.RpmFile.Name()))
 	refspec := config.RefSpec(fmt.Sprintf("+refs/heads/*:refs/remotes/origin/*"))
 
 	_, err = repo.CreateRemote(&config.RemoteConfig{
@@ -125,13 +125,13 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 	}
 }
 
-func getTipStream(pd *data.ProcessData, module string, pushBranch string) string {
+func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPushBranch string) string {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
 		log.Fatalf("could not init git Repo: %v", err)
 	}
 
-	remoteUrl := fmt.Sprintf("%s/rpms/%s.git", pd.UpstreamPrefix, module)
+	remoteUrl := fmt.Sprintf("%s/rpms/%s.git", pd.UpstreamPrefix, gitlabify(module))
 	refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 	remote, err := repo.CreateRemote(&config.RemoteConfig{
 		Name:  "origin",
@@ -153,6 +153,27 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string) string
 
 	for _, ref := range list {
 		prefix := fmt.Sprintf("refs/heads/%s", pushBranch)
+
+		branchVersion := strings.Split(pushBranch, "-")
+		if len(branchVersion) == 3 {
+			version := branchVersion[2]
+			// incompatible pattern: v1,v2 etc.
+			// example can be found in refs/tags/imports/c8-stream-1.1/subversion-1.10-8030020200519083055.9ce6d490
+			if strings.HasPrefix(version, "v") {
+				prefix = strings.Replace(prefix, version, strings.TrimPrefix(version, "v"), 1)
+			}
+		}
+
+		log.Println(prefix, ref.Name().String())
+
+		if strings.HasPrefix(ref.Name().String(), prefix) {
+			tipHash = ref.Hash().String()
+		}
+	}
+
+	for _, ref := range list {
+		prefix := fmt.Sprintf("refs/heads/%s", origPushBranch)
+
 		if strings.HasPrefix(ref.Name().String(), prefix) {
 			tipHash = ref.Hash().String()
 		}
@@ -213,7 +234,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		}
 
 		rpm.Ref = pushBranch
-		tipHash = getTipStream(pd, name, pushBranch)
+		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch)
 
 		err = module.Marshal(md.Worktree.Filesystem, mdTxtPath)
 		if err != nil {

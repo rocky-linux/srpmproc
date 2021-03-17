@@ -22,6 +22,10 @@ import (
 
 var tagImportRegex *regexp.Regexp
 
+func gitlabify(str string) string {
+	return strings.Replace(str, "+", "plus", -1)
+}
+
 // ProcessRPM checks the RPM specs and discards any remote files
 // This functions also sorts files into directories
 // .spec files goes into -> SPECS
@@ -51,7 +55,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		if err != nil {
 			log.Fatalf("could not init git Repo: %v", err)
 		}
-		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, md.RpmFile.Name())
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.RpmFile.Name()))
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 
 		remote, err := repo.CreateRemote(&config.RemoteConfig{
@@ -141,7 +145,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		}
 
 		// create a new remote
-		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, rpmFile.Name())
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(rpmFile.Name()))
 		log.Printf("using remote: %s", remoteUrl)
 		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.PushBranch, md.PushBranch))
 		log.Printf("using refspec: %s", refspec)
