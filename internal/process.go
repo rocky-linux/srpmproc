@@ -101,17 +101,6 @@ func ProcessRPM(pd *data.ProcessData) {
 			continue
 		}
 
-		rpmFile := md.RpmFile
-		// create new Repo for final dist
-		repo, err := git.Init(memory.NewStorage(), pd.FsCreator())
-		if err != nil {
-			log.Fatalf("could not create new dist Repo: %v", err)
-		}
-		w, err := repo.Worktree()
-		if err != nil {
-			log.Fatalf("could not get dist Worktree: %v", err)
-		}
-
 		var matchString string
 		if !tagImportRegex.MatchString(md.TagBranch) {
 			if pd.ModuleMode {
@@ -132,6 +121,17 @@ func ProcessRPM(pd *data.ProcessData) {
 		match := tagImportRegex.FindStringSubmatch(matchString)
 		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
+
+		rpmFile := md.RpmFile
+		// create new Repo for final dist
+		repo, err := git.Init(memory.NewStorage(), pd.FsCreator(md.PushBranch))
+		if err != nil {
+			log.Fatalf("could not create new dist Repo: %v", err)
+		}
+		w, err := repo.Worktree()
+		if err != nil {
+			log.Fatalf("could not get dist Worktree: %v", err)
+		}
 
 		shouldContinue := true
 		for _, ignoredTag := range tagIgnoreList {
@@ -275,7 +275,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			}
 		}
 
-		if pd.TmpFsMode {
+		if pd.TmpFsMode != "" {
 			continue
 		}
 

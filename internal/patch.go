@@ -87,18 +87,21 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 		log.Fatalf("could not create remote: %v", err)
 	}
 
-	err = repo.Fetch(&git.FetchOptions{
+	fetchOptions := &git.FetchOptions{
 		RemoteName: "origin",
 		RefSpecs:   []config.RefSpec{refspec},
-		Auth:       pd.Authenticator,
-	})
+	}
+	if !strings.HasPrefix(pd.UpstreamPrefix, "http") {
+		fetchOptions.Auth = pd.Authenticator
+	}
+	err = repo.Fetch(fetchOptions)
 
 	refName := plumbing.NewBranchReferenceName(md.PushBranch)
 	log.Printf("set reference to ref: %s", refName)
 
 	if err != nil {
 		// no patches active
-		log.Println("info: patch Repo not found")
+		log.Println("info: patch repo not found")
 		return
 	} else {
 		err = w.Checkout(&git.CheckoutOptions{

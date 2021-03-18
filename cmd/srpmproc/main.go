@@ -11,7 +11,6 @@ import (
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -38,7 +37,7 @@ var (
 	singleTag          string
 	noDupMode          bool
 	moduleMode         bool
-	tmpFsMode          bool
+	tmpFsMode          string
 	noStorageDownload  bool
 	noStorageUpload    bool
 )
@@ -96,20 +95,17 @@ func mn(_ *cobra.Command, _ []string) {
 		log.Fatalf("could not get git authenticator: %v", err)
 	}
 
-	fsCreator := func() billy.Filesystem {
+	fsCreator := func(branch string) billy.Filesystem {
 		return memfs.New()
 	}
 
-	if tmpFsMode {
-		tmpBaseDir, err := ioutil.TempDir(os.TempDir(), "srpmproc-*")
-		if err != nil {
-			log.Fatalf("could not create temp dir: %v", err)
-		}
-		log.Printf("using temp dir: %s", tmpBaseDir)
-		fsCreator = func() billy.Filesystem {
-			tmpDir, err := ioutil.TempDir(tmpBaseDir, "*")
+	if tmpFsMode != "" {
+		log.Printf("using tmpfs dir: %s", tmpFsMode)
+		fsCreator = func(branch string) billy.Filesystem {
+			tmpDir := filepath.Join(tmpFsMode, branch)
+			err := os.MkdirAll(tmpDir, 0755)
 			if err != nil {
-				log.Fatalf("could not create temp dir: %v", err)
+				log.Fatalf("could not create tmpfs dir: %v", err)
 			}
 			return osfs.New(tmpDir)
 		}
@@ -160,7 +156,7 @@ func main() {
 	root.Flags().StringVar(&singleTag, "single-tag", "", "If set, only this tag is imported")
 	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
 	root.Flags().BoolVar(&moduleMode, "module-mode", false, "If enabled, imports a module instead of a package")
-	root.Flags().BoolVar(&tmpFsMode, "tmpfs-mode", false, "If enabled, packages are imported and patched but not pushed")
+	root.Flags().StringVar(&tmpFsMode, "tmpfs-mode", "", "If set, packages are imported to path and patched but not pushed")
 	root.Flags().BoolVar(&noStorageDownload, "no-storage-download", false, "If enabled, blobs are always downloaded from upstream")
 	root.Flags().BoolVar(&noStorageUpload, "no-storage-upload", false, "If enabled, blobs are not uploaded to blob storage")
 

@@ -24,8 +24,8 @@ type ProcessData struct {
 	BlobStorage        blob.Storage
 	NoDupMode          bool
 	ModuleMode         bool
-	TmpFsMode          bool
+	TmpFsMode          string
 	NoStorageDownload  bool
 	NoStorageUpload    bool
-	FsCreator          func() billy.Filesystem
+	FsCreator          func(branch string) billy.Filesystem
 }
