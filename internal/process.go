@@ -53,7 +53,7 @@ func ProcessRPM(pd *data.ProcessData) {
 	if pd.NoDupMode {
 		repo, err := git.Init(memory.NewStorage(), memfs.New())
 		if err != nil {
-			log.Fatalf("could not init git Repo: %v", err)
+			log.Fatalf("could not init git repo: %v", err)
 		}
 		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.RpmFile.Name()))
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
@@ -230,15 +230,14 @@ func ProcessRPM(pd *data.ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			path := checksum
-			if strContains(alreadyUploadedBlobs, path) {
+			if strContains(alreadyUploadedBlobs, checksum) {
 				continue
 			}
-			if !pd.BlobStorage.Exists(path) && !pd.NoStorageUpload {
-				pd.BlobStorage.Write(path, sourceFileBts)
-				log.Printf("wrote %s to blob storage", path)
+			if !pd.BlobStorage.Exists(checksum) && !pd.NoStorageUpload {
+				pd.BlobStorage.Write(checksum, sourceFileBts)
+				log.Printf("wrote %s to blob storage", checksum)
 			}
-			alreadyUploadedBlobs = append(alreadyUploadedBlobs, path)
+			alreadyUploadedBlobs = append(alreadyUploadedBlobs, checksum)
 		}
 
 		_, err = w.Add(metadataFile)
@@ -257,6 +256,10 @@ func ProcessRPM(pd *data.ProcessData) {
 			}
 		}
 
+		if pd.TmpFsMode != "" {
+			continue
+		}
+
 		pd.Importer.PostProcess(md)
 
 		// show status
@@ -273,10 +276,6 @@ func ProcessRPM(pd *data.ProcessData) {
 					log.Fatalf("could not delete extra file %s: %v", path, err)
 				}
 			}
-		}
-
-		if pd.TmpFsMode != "" {
-			continue
 		}
 
 		var hashes []plumbing.Hash
