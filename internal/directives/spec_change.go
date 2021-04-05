@@ -210,6 +210,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	inField := ""
 	lastSource := ""
 	lastPatch := ""
+	hasPatch := false
 
 	version := ""
 	importName := strings.Replace(pd.Importer.ImportName(pd, md), md.RpmFile.Name(), "1", 1)
@@ -239,6 +240,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				lastSource = field
 			} else if strings.HasPrefix(field, "Patch") {
 				lastPatch = field
+				hasPatch = true
 			} else {
 				for _, nf := range cfg.SpecChange.NewField {
 					if field == nf.Key {
@@ -364,7 +366,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				return err
 			}
 
-			if executed && !strings.Contains(specStr, "Patch") {
+			if executed && !hasPatch {
 				newLines = append(newLines, "")
 				inField = "Patch"
 			}
