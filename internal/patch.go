@@ -16,6 +16,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
@@ -128,7 +129,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 	}
 }
 
-func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPushBranch string) string {
+func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPushBranch string, tries int) string {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
 		log.Fatalf("could not init git Repo: %v", err)
@@ -149,6 +150,13 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		Auth: pd.Authenticator,
 	})
 	if err != nil {
+		log.Printf("could not import module: %s", module)
+		if tries < 3 {
+			log.Printf("could not get rpm refs. will retry in 3s. %v", err)
+			time.Sleep(3 * time.Second)
+			return getTipStream(pd, module, pushBranch, origPushBranch, tries+1)
+		}
+
 		log.Fatalf("could not get rpm refs. import the rpm before the module: %v", err)
 	}
 
@@ -167,22 +175,33 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 			}
 		}
 
-		log.Println(prefix, ref.Name().String())
-
-		if strings.HasPrefix(ref.Name().String(), prefix) {
-			tipHash = ref.Hash().String()
-		}
-	}
-
-	for _, ref := range list {
-		prefix := fmt.Sprintf("refs/heads/%s", origPushBranch)
-
 		if strings.HasPrefix(ref.Name().String(), prefix) {
 			tipHash = ref.Hash().String()
 		}
 	}
 
 	if tipHash == "" {
+		for _, ref := range list {
+			prefix := fmt.Sprintf("refs/heads/%s", origPushBranch)
+
+			if strings.HasPrefix(ref.Name().String(), prefix) {
+				tipHash = ref.Hash().String()
+			}
+		}
+	}
+
+	if tipHash == "" {
+		for _, ref := range list {
+			if !strings.Contains(ref.Name().String(), "stream") {
+				tipHash = ref.Hash().String()
+			}
+		}
+	}
+
+	if tipHash == "" {
+		for _, ref := range list {
+			log.Println(pushBranch, ref.Name())
+		}
 		log.Fatal("could not find tip hash")
 	}
 
@@ -212,6 +231,11 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		log.Fatalf("could not parse modulemd file: %v", err)
 	}
 
+	log.Println("This module contains the following rpms:")
+	for name := range module.Data.Components.Rpms {
+		log.Printf("\t- %s", name)
+	}
+
 	for name, rpm := range module.Data.Components.Rpms {
 		var tipHash string
 		var pushBranch string
@@ -237,7 +261,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		}
 
 		rpm.Ref = pushBranch
-		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch)
+		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
 
 		err = module.Marshal(md.Worktree.Filesystem, mdTxtPath)
 		if err != nil {
@@ -245,6 +269,12 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		}
 
 		rpm.Ref = tipHash
+	}
+
+	for name, rpm := range module.Data.Components.Rpms {
+		if name != gitlabify(name) {
+			rpm.Repository = fmt.Sprintf("https://%s/rpms/%s.git", pd.UpstreamPrefixHttps, gitlabify(name))
+		}
 	}
 
 	rootModule := fmt.Sprintf("%s.yaml", md.RpmFile.Name())

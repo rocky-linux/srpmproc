@@ -85,8 +85,22 @@ func ProcessRPM(pd *data.ProcessData) {
 	sourceRepo := *md.Repo
 	sourceWorktree := *md.Worktree
 
+	commitPin := map[string]string{}
+
 	if pd.SingleTag != "" {
 		md.Branches = []string{fmt.Sprintf("refs/tags/%s", pd.SingleTag)}
+	} else if len(pd.ManualCommits) > 0 {
+		md.Branches = []string{}
+		for _, commit := range pd.ManualCommits {
+			branchCommit := strings.Split(commit, ":")
+			if len(branchCommit) != 2 {
+				log.Fatalln("invalid manual commit list")
+			}
+
+			head := fmt.Sprintf("refs/heads/%s", branchCommit[0])
+			md.Branches = append(md.Branches, head)
+			commitPin[head] = branchCommit[1]
+		}
 	}
 
 	for _, branch := range md.Branches {
@@ -168,6 +182,11 @@ func ProcessRPM(pd *data.ProcessData) {
 		refName := plumbing.NewBranchReferenceName(md.PushBranch)
 		log.Printf("set reference to ref: %s", refName)
 
+		var hash plumbing.Hash
+		if commitPin[md.PushBranch] != "" {
+			hash = plumbing.NewHash(commitPin[md.PushBranch])
+		}
+
 		if err != nil {
 			h := plumbing.NewSymbolicReference(plumbing.HEAD, refName)
 			if err := repo.Storer.CheckAndSetReference(h, nil); err != nil {
@@ -176,6 +195,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		} else {
 			err = w.Checkout(&git.CheckoutOptions{
 				Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
+				Hash:   hash,
 				Force:  true,
 			})
 			if err != nil {
