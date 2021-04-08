@@ -119,27 +119,25 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	}
 	_ = tagIter.ForEach(tagAdd)
 
-	if len(latestTags) == 0 {
-		list, err := remote.List(&git.ListOptions{})
+	list, err := remote.List(&git.ListOptions{})
+	if err != nil {
+		log.Fatalf("could not list upstream: %v", err)
+	}
+
+	for _, ref := range list {
+		if ref.Hash().IsZero() {
+			continue
+		}
+
+		commit, err := repo.CommitObject(ref.Hash())
 		if err != nil {
-			log.Fatalf("could not list upstream: %v", err)
+			log.Printf("could not get commit object for ref %s: %v", ref.Name().String(), err)
+			continue
 		}
-
-		for _, ref := range list {
-			if ref.Hash().IsZero() {
-				continue
-			}
-
-			commit, err := repo.CommitObject(ref.Hash())
-			if err != nil {
-				log.Printf("could not get commit object for ref %s: %v", ref.Name().String(), err)
-				continue
-			}
-			_ = tagAdd(&object.Tag{
-				Name:   strings.TrimPrefix(string(ref.Name()), "refs/tags/"),
-				Tagger: commit.Committer,
-			})
-		}
+		_ = tagAdd(&object.Tag{
+			Name:   strings.TrimPrefix(string(ref.Name()), "refs/tags/"),
+			Tagger: commit.Committer,
+		})
 	}
 
 	for _, branch := range latestTags {

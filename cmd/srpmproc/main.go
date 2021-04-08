@@ -111,10 +111,16 @@ func mn(_ *cobra.Command, _ []string) {
 		}
 		lastKeyLocation = filepath.Join(usr.HomeDir, ".ssh/id_rsa")
 	}
-	// create ssh key authenticator
-	authenticator, err := ssh.NewPublicKeysFromFile(sshUser, lastKeyLocation, "")
-	if err != nil {
-		log.Fatalf("could not get git authenticator: %v", err)
+
+	var authenticator *ssh.PublicKeys
+
+	if tmpFsMode == "" {
+		var err error
+		// create ssh key authenticator
+		authenticator, err = ssh.NewPublicKeysFromFile(sshUser, lastKeyLocation, "")
+		if err != nil {
+			log.Fatalf("could not get git authenticator: %v", err)
+		}
 	}
 
 	fsCreator := func(branch string) billy.Filesystem {
