@@ -151,7 +151,7 @@ func (s *SrpmMode) WriteSource(_ *data.ProcessData, md *data.ModeData) {
 		_ = f.Close()
 
 		// don't add ignored file to git
-		if ignoredContains(md.SourcesToIgnore, fileName) {
+		if data.IgnoredContains(md.SourcesToIgnore, fileName) {
 			continue
 		}
 

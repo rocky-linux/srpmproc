@@ -30,7 +30,7 @@ import (
 	"os"
 )
 
-func replace(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
+func replace(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, replace := range cfg.Replace {
 		filePath := checkAddPrefix(replace.File)
 		stat, err := pushTree.Filesystem.Stat(filePath)
@@ -69,6 +69,18 @@ func replace(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTr
 			_, err := f.Write([]byte(replacing.WithInline))
 			if err != nil {
 				return errors.New(fmt.Sprintf("COULD_NOT_WRITE_INLINE:%s", filePath))
+			}
+			break
+		case *srpmprocpb.Replace_WithLookaside:
+			bts := pd.BlobStorage.Read(replacing.WithLookaside)
+			hasher := data.CompareHash(bts, replacing.WithLookaside)
+			if hasher == nil {
+				return errors.New("LOOKASIDE_FILE_AND_HASH_NOT_MATCHING")
+			}
+
+			_, err := f.Write(bts)
+			if err != nil {
+				return errors.New(fmt.Sprintf("COULD_NOT_WRITE_LOOKASIDE:%s", filePath))
 			}
 			break
 		}

@@ -23,7 +23,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal"
+	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
@@ -113,7 +113,7 @@ func runFetch(_ *cobra.Command, _ []string) {
 			log.Fatalf("could not close body handle: %v", err)
 		}
 
-		hasher := internal.CompareHash(body, hash)
+		hasher := data.CompareHash(body, hash)
 		if hasher == nil {
 			log.Fatal("checksum in metadata does not match dist-git file")
 		}

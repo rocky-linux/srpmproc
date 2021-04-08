@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package internal
+package data
 
 import (
 	"crypto/md5"
@@ -26,7 +26,6 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/go-git/go-billy/v5"
 	"hash"
 	"io"
@@ -35,7 +34,7 @@ import (
 	"path/filepath"
 )
 
-func copyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
+func CopyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
 	read, err := from.ReadDir(path)
 	if err != nil {
 		log.Fatalf("could not read dir: %v", err)
@@ -46,7 +45,7 @@ func copyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
 
 		if fi.IsDir() {
 			_ = to.MkdirAll(fullPath, 0755)
-			copyFromFs(from, to, fullPath)
+			CopyFromFs(from, to, fullPath)
 		} else {
 			_ = to.Remove(fullPath)
 
@@ -68,7 +67,7 @@ func copyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
 	}
 }
 
-func ignoredContains(a []*data.IgnoredSource, b string) bool {
+func IgnoredContains(a []*IgnoredSource, b string) bool {
 	for _, val := range a {
 		if val.Name == b {
 			return true
@@ -78,7 +77,7 @@ func ignoredContains(a []*data.IgnoredSource, b string) bool {
 	return false
 }
 
-func strContains(a []string, b string) bool {
+func StrContains(a []string, b string) bool {
 	for _, val := range a {
 		if val == b {
 			return true

@@ -273,7 +273,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 			log.Fatalf("could not open file pointer: %v", err)
 		}
 
-		hasher := CompareHash(body, hash)
+		hasher := data.CompareHash(body, hash)
 		if hasher == nil {
 			log.Fatal("checksum in metadata does not match dist-git file")
 		}

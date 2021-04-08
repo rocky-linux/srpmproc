@@ -225,7 +225,7 @@ func ProcessRPM(pd *data.ProcessData) {
 
 		pd.Importer.WriteSource(pd, md)
 
-		copyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
+		data.CopyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
 		md.Repo = repo
 		md.Worktree = w
 
@@ -270,7 +270,7 @@ func ProcessRPM(pd *data.ProcessData) {
 				log.Fatalf("could not write to metadata file: %v", err)
 			}
 
-			if strContains(alreadyUploadedBlobs, checksum) {
+			if data.StrContains(alreadyUploadedBlobs, checksum) {
 				continue
 			}
 			if !pd.BlobStorage.Exists(checksum) && !pd.NoStorageUpload {

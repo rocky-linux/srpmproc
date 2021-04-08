@@ -31,23 +31,53 @@ import (
 	"path/filepath"
 )
 
-func add(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
+// returns right if not empty, else left
+func eitherString(left string, right string) string {
+	if right != "" {
+		return right
+	}
+
+	return left
+}
+
+func add(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, add := range cfg.Add {
-		filePath := checkAddPrefix(filepath.Base(add.File))
+		var replacingBytes []byte
+		var filePath string
+
+		switch addType := add.Source.(type) {
+		case *srpmprocpb.Add_File:
+			filePath = checkAddPrefix(eitherString(filepath.Base(addType.File), add.Name))
+
+			fPatch, err := patchTree.Filesystem.OpenFile(addType.File, os.O_RDONLY, 0644)
+			if err != nil {
+				return errors.New(fmt.Sprintf("COULD_NOT_OPEN_FROM:%s", addType.File))
+			}
+
+			replacingBytes, err = ioutil.ReadAll(fPatch)
+			if err != nil {
+				return errors.New(fmt.Sprintf("COULD_NOT_READ_FROM:%s", addType.File))
+			}
+			break
+		case *srpmprocpb.Add_Lookaside:
+			filePath = checkAddPrefix(eitherString(filepath.Base(addType.Lookaside), add.Name))
+			replacingBytes = pd.BlobStorage.Read(addType.Lookaside)
+
+			hashFunction := data.CompareHash(replacingBytes, addType.Lookaside)
+			if hashFunction == nil {
+				return errors.New(fmt.Sprintf("LOOKASIDE_HASH_DOES_NOT_MATCH:%s", addType.Lookaside))
+			}
+
+			md.SourcesToIgnore = append(md.SourcesToIgnore, &data.IgnoredSource{
+				Name:         filePath,
+				HashFunction: hashFunction,
+			})
+			break
+		}
 
 		f, err := pushTree.Filesystem.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			return errors.New(fmt.Sprintf("COULD_NOT_OPEN_DESTINATION:%s", filePath))
-		}
-
-		fPatch, err := patchTree.Filesystem.OpenFile(add.File, os.O_RDONLY, 0644)
-		if err != nil {
-			return errors.New(fmt.Sprintf("COULD_NOT_OPEN_FROM:%s", add.File))
-		}
-
-		replacingBytes, err := ioutil.ReadAll(fPatch)
-		if err != nil {
-			return errors.New(fmt.Sprintf("COULD_NOT_READ_FROM:%s", add.File))
 		}
 
 		_, err = f.Write(replacingBytes)

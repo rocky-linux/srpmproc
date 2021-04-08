@@ -17,6 +17,9 @@ message Replace {
 
     // Replace with inline content
     string with_inline = 3;
+
+    // Replace with lookaside cache object
+    string with_lookaside = 4;
   }
 }
 
@@ -34,10 +37,13 @@ message Delete {
 // Use the `SpecChange` directive for that
 message Add {
   // Required - file to add
-  string file = 1;
+  oneof source {
+    string file = 1;
+    string lookaside = 2;
+  }
 
   // Overrides file name if specified
-  string name = 2;
+  string name = 3;
 }
 
 // Lookaside directive puts patched files in blob storage.
