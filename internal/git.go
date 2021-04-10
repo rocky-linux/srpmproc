@@ -131,7 +131,6 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 
 		commit, err := repo.CommitObject(ref.Hash())
 		if err != nil {
-			log.Printf("could not get commit object for ref %s: %v", ref.Name().String(), err)
 			continue
 		}
 		_ = tagAdd(&object.Tag{
