@@ -73,7 +73,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	refspec := config.RefSpec("+refs/heads/*:refs/remotes/*")
 	remote, err := repo.CreateRemote(&config.RemoteConfig{
 		Name:  "upstream",
-		URLs:  []string{pd.RpmLocation},
+		URLs:  []string{fmt.Sprintf("%s.git", pd.RpmLocation)},
 		Fetch: []config.RefSpec{refspec},
 	})
 	if err != nil {
