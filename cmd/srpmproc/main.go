@@ -96,9 +96,9 @@ func mn(_ *cobra.Command, _ []string) {
 		importer = &internal.SrpmMode{}
 	} else {
 		if moduleMode {
-			sourceRpmLocation = fmt.Sprintf("%s/%s", modulePrefix, sourceRpm)
+			sourceRpmLocation = fmt.Sprintf("%s/%s.git", modulePrefix, sourceRpm)
 		} else {
-			sourceRpmLocation = fmt.Sprintf("%s/%s", rpmPrefix, sourceRpm)
+			sourceRpmLocation = fmt.Sprintf("%s/%s.git", rpmPrefix, sourceRpm)
 		}
 		importer = &internal.GitMode{}
 	}
