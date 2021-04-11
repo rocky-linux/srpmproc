@@ -43,6 +43,10 @@ import (
 var tagImportRegex *regexp.Regexp
 
 func gitlabify(str string) string {
+	if str == "tree" {
+		return "treepkg"
+	}
+
 	return strings.Replace(str, "+", "plus", -1)
 }
 
