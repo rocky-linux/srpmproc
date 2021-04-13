@@ -370,7 +370,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			log.Fatalf("could not create tag: %v", err)
 		}
 
-		pushRefspecs = append(pushRefspecs, config.RefSpec(fmt.Sprintf("HEAD:%s", plumbing.NewTagReferenceName(newTag))))
+		pushRefspecs = append(pushRefspecs, config.RefSpec("HEAD:"+plumbing.NewTagReferenceName(newTag)))
 
 		err = repo.Push(&git.PushOptions{
 			RemoteName: "origin",
