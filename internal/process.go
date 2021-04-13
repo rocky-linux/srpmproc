@@ -159,6 +159,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		match := tagImportRegex.FindStringSubmatch(matchString)
 		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
+		newTag = strings.Replace(newTag, "%", "%%", -1)
 
 		rpmFile := md.RpmFile
 		// create new Repo for final dist
