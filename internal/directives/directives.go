@@ -22,13 +22,14 @@ package directives
 
 import (
 	"encoding/json"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
-	"github.com/go-git/go-git/v5"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/rocky-linux/srpmproc/internal/data"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 )
 
 func checkAddPrefix(file string) string {

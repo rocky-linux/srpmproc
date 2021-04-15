@@ -24,12 +24,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	"github.com/cavaliercoder/go-cpio"
-	"github.com/cavaliercoder/go-rpm"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"io"
 	"io/ioutil"
 	"log"
@@ -37,6 +31,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/cavaliercoder/go-cpio"
+	"github.com/cavaliercoder/go-rpm"
+	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/rocky-linux/srpmproc/internal/data"
 )
 
 type SrpmMode struct{}

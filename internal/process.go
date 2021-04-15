@@ -24,13 +24,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"io/ioutil"
 	"log"
 	"os"
@@ -38,6 +31,14 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/rocky-linux/srpmproc/internal/data"
 )
 
 var tagImportRegex *regexp.Regexp

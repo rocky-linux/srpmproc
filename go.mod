@@ -1,4 +1,4 @@
-module git.rockylinux.org/release-engineering/public/srpmproc
+module github.com/rocky-linux/srpmproc
 
 go 1.15
 

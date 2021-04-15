@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "git.rockylinux.org/release-engineering/public/srpmproc/pb;srpmprocpb";
+option go_package = "github.com/rocky-linux/srpmproc/pb;srpmprocpb";
 
 package srpmproc;
 

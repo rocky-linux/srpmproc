@@ -24,11 +24,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
+	"log"
+
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/go-git/go-git/v5"
-	"log"
+	"github.com/rocky-linux/srpmproc/internal/data"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 )
 
 func patch(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {

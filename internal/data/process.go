@@ -21,9 +21,9 @@
 package data
 
 import (
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/rocky-linux/srpmproc/internal/blob"
 )
 
 type ProcessData struct {

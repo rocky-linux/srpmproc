@@ -27,13 +27,14 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
-	"github.com/go-git/go-git/v5"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/rocky-linux/srpmproc/internal/data"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 )
 
 func lookaside(cfg *srpmprocpb.Cfg, _ *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {

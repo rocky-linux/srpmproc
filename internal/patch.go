@@ -22,21 +22,22 @@ package internal
 
 import (
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/directives"
-	"git.rockylinux.org/release-engineering/public/srpmproc/modulemd"
-	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/storage/memory"
-	"google.golang.org/protobuf/encoding/prototext"
 	"io/ioutil"
 	"log"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/storage/memory"
+	"github.com/rocky-linux/srpmproc/internal/data"
+	"github.com/rocky-linux/srpmproc/internal/directives"
+	"github.com/rocky-linux/srpmproc/modulemd"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {

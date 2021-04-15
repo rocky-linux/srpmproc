@@ -23,9 +23,6 @@ package directives
 import (
 	"errors"
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
-	srpmprocpb "git.rockylinux.org/release-engineering/public/srpmproc/pb"
-	"github.com/go-git/go-git/v5"
 	"io/ioutil"
 	"math"
 	"os"
@@ -34,6 +31,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/rocky-linux/srpmproc/internal/data"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 )
 
 const (
