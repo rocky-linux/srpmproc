@@ -22,22 +22,22 @@ package main
 
 import (
 	"fmt"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob/file"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob/gcs"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/blob/s3"
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal/data"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/rocky-linux/srpmproc/internal/blob"
+	"github.com/rocky-linux/srpmproc/internal/blob/file"
+	"github.com/rocky-linux/srpmproc/internal/blob/gcs"
+	"github.com/rocky-linux/srpmproc/internal/blob/s3"
+	"github.com/rocky-linux/srpmproc/internal/data"
 	"log"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 
-	"git.rockylinux.org/release-engineering/public/srpmproc/internal"
+	"github.com/rocky-linux/srpmproc/internal"
 	"github.com/spf13/cobra"
 )
 
