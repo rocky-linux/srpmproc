@@ -73,6 +73,10 @@ type ModuleMd struct {
 			Description string   `yaml:"description,omitempty"`
 			Rpms        []string `yaml:"rpms,omitempty"`
 		} `yaml:"profiles,omitempty"`
+		Profile map[string]*struct {
+			Description string   `yaml:"description,omitempty"`
+			Rpms        []string `yaml:"rpms,omitempty"`
+		} `yaml:"profile,omitempty"`
 		API struct {
 			Rpms []string `yaml:"rpms,omitempty"`
 		} `yaml:"api,omitempty"`
