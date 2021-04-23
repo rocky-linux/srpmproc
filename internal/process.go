@@ -122,7 +122,7 @@ func ProcessRPM(pd *data.ProcessData) {
 				log.Fatalln("invalid manual commit list")
 			}
 
-			head := fmt.Sprintf("refs/heads/%s", branchCommit[0])
+			head := fmt.Sprintf("refs/tags/imports/%s/%s-%s", branchCommit[0], md.RpmFile.Name(), branchCommit[1])
 			md.Branches = append(md.Branches, head)
 			commitPin[head] = branchCommit[1]
 		}
