@@ -226,7 +226,7 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		log.Fatal("could not find tip hash")
 	}
 
-	return tipHash
+	return strings.TrimSpace(tipHash)
 }
 
 func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
@@ -264,7 +264,9 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		// TODO: maybe point to correct release tag? but refer to latest for now,
 		// we're bootstrapping a new distro for latest RHEL8 anyways. So earlier
 		// versions are not that important
-		if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
+		if strings.HasPrefix(rpm.Ref, "stream-rhel-rhel-") {
+			pushBranch = md.PushBranch
+		} else if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
 			repString := fmt.Sprintf("%s%ss-", pd.BranchPrefix, string(split[4][0]))
 			newString := fmt.Sprintf("%s%s-", pd.BranchPrefix, string(split[4][0]))
 			pushBranch = strings.Replace(md.PushBranch, repString, newString, 1)
