@@ -252,6 +252,12 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		log.Fatalf("could not parse modulemd file: %v", err)
 	}
 
+	// Get stream branch from tag
+	match := tagImportRegex.FindStringSubmatch(md.TagBranch)
+	streamBranch := strings.Split(match[2], "-")
+	// Force stream to be the same as stream name in branch
+	module.Data.Stream = streamBranch[len(streamBranch)-1]
+
 	log.Println("This module contains the following rpms:")
 	for name := range module.Data.Components.Rpms {
 		log.Printf("\t- %s", name)
