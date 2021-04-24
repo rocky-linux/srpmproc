@@ -291,6 +291,37 @@ func ProcessRPM(pd *data.ProcessData) {
 			log.Fatalf("could not add metadata file: %v", err)
 		}
 
+		gitlabified := gitlabify(md.RpmFile.Name())
+		if gitlabified != md.RpmFile.Name() {
+			specFiles, err := w.Filesystem.ReadDir("SPECS")
+			if err != nil {
+				log.Fatalf("could not read spec files: %v", err)
+			}
+
+			link := filepath.Join("SPECS", specFiles[0].Name())
+			target := filepath.Join("SPECS", fmt.Sprintf("%s.spec", gitlabified))
+
+			specFile, err := w.Filesystem.OpenFile(link, os.O_RDONLY, 0644)
+			if err != nil {
+				log.Fatalf("could not read spec file: %v", err)
+			}
+
+			specBts, err := ioutil.ReadAll(specFile)
+			if err != nil {
+				log.Fatalf("could not read all bytes: %v", err)
+			}
+
+			targetFile, err := w.Filesystem.OpenFile(target, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0644)
+			if err != nil {
+				log.Fatalf("could not open target spec: %v", err)
+			}
+			_, err = targetFile.Write(specBts)
+			if err != nil {
+				log.Fatalf("could not write target spec: %v", err)
+			}
+			_ = targetFile.Close()
+		}
+
 		lastFilesToAdd := []string{".gitignore", "SPECS"}
 		for _, f := range lastFilesToAdd {
 			_, err := w.Filesystem.Stat(f)
