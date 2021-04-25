@@ -295,17 +295,10 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 			log.Fatal("could not recognize modulemd ref")
 		}
 
-		rpm.Ref = pushBranch
 		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
 		if tipHash == "0000000000000000000000000000000000000000" {
 			pushBranch = defaultBranch
-			rpm.Ref = pushBranch
 			tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
-		}
-
-		err = module.Marshal(md.Worktree.Filesystem, mdTxtPath)
-		if err != nil {
-			log.Fatalf("could not marshal modulemd: %v", err)
 		}
 
 		rpm.Ref = tipHash
