@@ -27,27 +27,28 @@ import (
 )
 
 type ProcessData struct {
-	RpmLocation         string
-	UpstreamPrefix      string
-	SshKeyLocation      string
-	SshUser             string
-	Version             int
-	GitCommitterName    string
-	GitCommitterEmail   string
-	Mode                int
-	ModulePrefix        string
-	ImportBranchPrefix  string
-	BranchPrefix        string
-	SingleTag           string
-	Authenticator       *ssh.PublicKeys
-	Importer            ImportMode
-	BlobStorage         blob.Storage
-	NoDupMode           bool
-	ModuleMode          bool
-	TmpFsMode           string
-	NoStorageDownload   bool
-	NoStorageUpload     bool
-	ManualCommits       []string
-	UpstreamPrefixHttps string
-	FsCreator           func(branch string) billy.Filesystem
+	RpmLocation          string
+	UpstreamPrefix       string
+	SshKeyLocation       string
+	SshUser              string
+	Version              int
+	GitCommitterName     string
+	GitCommitterEmail    string
+	Mode                 int
+	ModulePrefix         string
+	ImportBranchPrefix   string
+	BranchPrefix         string
+	SingleTag            string
+	Authenticator        *ssh.PublicKeys
+	Importer             ImportMode
+	BlobStorage          blob.Storage
+	NoDupMode            bool
+	ModuleMode           bool
+	TmpFsMode            string
+	NoStorageDownload    bool
+	NoStorageUpload      bool
+	ManualCommits        []string
+	UpstreamPrefixHttps  string
+	ModuleFallbackStream string
+	FsCreator            func(branch string) billy.Filesystem
 }

@@ -263,34 +263,45 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		log.Printf("\t- %s", name)
 	}
 
+	defaultBranch := md.PushBranch
+	if pd.ModuleFallbackStream != "" {
+		defaultBranch = fmt.Sprintf("%s%d-stream-%s", pd.BranchPrefix, pd.Version, pd.ModuleFallbackStream)
+	}
+
 	for name, rpm := range module.Data.Components.Rpms {
 		var tipHash string
 		var pushBranch string
+
 		split := strings.Split(rpm.Ref, "-")
 		// TODO: maybe point to correct release tag? but refer to latest for now,
 		// we're bootstrapping a new distro for latest RHEL8 anyways. So earlier
 		// versions are not that important
 		if strings.HasPrefix(rpm.Ref, "stream-rhel-rhel-") {
-			pushBranch = md.PushBranch
+			pushBranch = defaultBranch
 		} else if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
 			repString := fmt.Sprintf("%s%ss-", pd.BranchPrefix, string(split[4][0]))
 			newString := fmt.Sprintf("%s%s-", pd.BranchPrefix, string(split[4][0]))
 			pushBranch = strings.Replace(md.PushBranch, repString, newString, 1)
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 2 {
-			pushBranch = md.PushBranch
+			pushBranch = defaultBranch
 		} else if strings.HasPrefix(rpm.Ref, "stream-") && len(split) == 3 {
 			// example: ant
 			pushBranch = fmt.Sprintf("%s%d-stream-%s", pd.BranchPrefix, pd.Version, split[2])
 		} else if strings.HasPrefix(rpm.Ref, "stream-") {
 			pushBranch = fmt.Sprintf("%s%s-stream-%s", pd.BranchPrefix, string(split[3][0]), split[1])
 		} else if strings.HasPrefix(rpm.Ref, "rhel-") {
-			pushBranch = md.PushBranch
+			pushBranch = defaultBranch
 		} else {
 			log.Fatal("could not recognize modulemd ref")
 		}
 
 		rpm.Ref = pushBranch
 		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+		if tipHash == "0000000000000000000000000000000000000000" {
+			pushBranch = defaultBranch
+			rpm.Ref = pushBranch
+			tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+		}
 
 		err = module.Marshal(md.Worktree.Filesystem, mdTxtPath)
 		if err != nil {

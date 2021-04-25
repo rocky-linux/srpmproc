@@ -42,26 +42,27 @@ import (
 )
 
 var (
-	sourceRpm           string
-	sshKeyLocation      string
-	sshUser             string
-	upstreamPrefix      string
-	version             int
-	storageAddr         string
-	gitCommitterName    string
-	gitCommitterEmail   string
-	modulePrefix        string
-	rpmPrefix           string
-	importBranchPrefix  string
-	branchPrefix        string
-	singleTag           string
-	noDupMode           bool
-	moduleMode          bool
-	tmpFsMode           string
-	noStorageDownload   bool
-	noStorageUpload     bool
-	manualCommits       string
-	upstreamPrefixHttps string
+	sourceRpm            string
+	sshKeyLocation       string
+	sshUser              string
+	upstreamPrefix       string
+	version              int
+	storageAddr          string
+	gitCommitterName     string
+	gitCommitterEmail    string
+	modulePrefix         string
+	rpmPrefix            string
+	importBranchPrefix   string
+	branchPrefix         string
+	singleTag            string
+	noDupMode            bool
+	moduleMode           bool
+	tmpFsMode            string
+	noStorageDownload    bool
+	noStorageUpload      bool
+	manualCommits        string
+	upstreamPrefixHttps  string
+	moduleFallbackStream string
 )
 
 var root = &cobra.Command{
@@ -145,28 +146,29 @@ func mn(_ *cobra.Command, _ []string) {
 	}
 
 	internal.ProcessRPM(&data.ProcessData{
-		Importer:            importer,
-		RpmLocation:         sourceRpmLocation,
-		UpstreamPrefix:      upstreamPrefix,
-		SshKeyLocation:      sshKeyLocation,
-		SshUser:             sshUser,
-		Version:             version,
-		BlobStorage:         blobStorage,
-		GitCommitterName:    gitCommitterName,
-		GitCommitterEmail:   gitCommitterEmail,
-		ModulePrefix:        modulePrefix,
-		ImportBranchPrefix:  importBranchPrefix,
-		BranchPrefix:        branchPrefix,
-		SingleTag:           singleTag,
-		Authenticator:       authenticator,
-		NoDupMode:           noDupMode,
-		ModuleMode:          moduleMode,
-		TmpFsMode:           tmpFsMode,
-		NoStorageDownload:   noStorageDownload,
-		NoStorageUpload:     noStorageUpload,
-		ManualCommits:       manualCs,
-		UpstreamPrefixHttps: upstreamPrefixHttps,
-		FsCreator:           fsCreator,
+		Importer:             importer,
+		RpmLocation:          sourceRpmLocation,
+		UpstreamPrefix:       upstreamPrefix,
+		SshKeyLocation:       sshKeyLocation,
+		SshUser:              sshUser,
+		Version:              version,
+		BlobStorage:          blobStorage,
+		GitCommitterName:     gitCommitterName,
+		GitCommitterEmail:    gitCommitterEmail,
+		ModulePrefix:         modulePrefix,
+		ImportBranchPrefix:   importBranchPrefix,
+		BranchPrefix:         branchPrefix,
+		SingleTag:            singleTag,
+		Authenticator:        authenticator,
+		NoDupMode:            noDupMode,
+		ModuleMode:           moduleMode,
+		TmpFsMode:            tmpFsMode,
+		NoStorageDownload:    noStorageDownload,
+		NoStorageUpload:      noStorageUpload,
+		ManualCommits:        manualCs,
+		UpstreamPrefixHttps:  upstreamPrefixHttps,
+		ModuleFallbackStream: moduleFallbackStream,
+		FsCreator:            fsCreator,
 	})
 }
 
@@ -196,6 +198,7 @@ func main() {
 	root.Flags().BoolVar(&noStorageUpload, "no-storage-upload", false, "If enabled, blobs are not uploaded to blob storage")
 	root.Flags().StringVar(&manualCommits, "manual-commits", "", "Comma separated branch and commit list for packages with broken release tags (Format: BRANCH:HASH)")
 	root.Flags().StringVar(&upstreamPrefixHttps, "upstream-prefix-https", "", "Web version of upstream prefix. Required if module-mode")
+	root.Flags().StringVar(&moduleFallbackStream, "module-fallback-stream", "", "Override fallback stream. Some module packages are published as collections and mostly use the same stream name, some of them deviate from the main stream")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
