@@ -308,12 +308,6 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		rpm.Ref = tipHash
 	}
 
-	for name, rpm := range module.Data.Components.Rpms {
-		if name != gitlabify(name) {
-			rpm.Repository = fmt.Sprintf("https://%s/rpms/%s.git", pd.UpstreamPrefixHttps, gitlabify(name))
-		}
-	}
-
 	rootModule := fmt.Sprintf("%s.yaml", md.RpmFile.Name())
 	err = module.Marshal(md.Worktree.Filesystem, rootModule)
 	if err != nil {
