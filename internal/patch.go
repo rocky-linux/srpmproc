@@ -239,7 +239,11 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 	mdTxtPath := "SOURCES/modulemd.src.txt"
 	f, err := md.Worktree.Filesystem.Open(mdTxtPath)
 	if err != nil {
-		log.Fatalf("could not open modulemd file: %v", err)
+		mdTxtPath = "SOURCES/modulemd.txt"
+		f, err = md.Worktree.Filesystem.Open(mdTxtPath)
+		if err != nil {
+			log.Fatalf("could not open modulemd file: %v", err)
+		}
 	}
 
 	content, err := ioutil.ReadAll(f)
