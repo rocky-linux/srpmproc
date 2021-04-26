@@ -312,5 +312,5 @@ func (g *GitMode) ImportName(_ *data.ProcessData, md *data.ModeData) string {
 		return match[3]
 	}
 
-	return strings.TrimPrefix(md.TagBranch, "refs/heads/")
+	return strings.Replace(strings.TrimPrefix(md.TagBranch, "refs/heads/"), "%", "_", -1)
 }
