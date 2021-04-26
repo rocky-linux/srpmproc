@@ -320,6 +320,11 @@ func ProcessRPM(pd *data.ProcessData) {
 				log.Fatalf("could not write target spec: %v", err)
 			}
 			_ = targetFile.Close()
+
+			err = w.Filesystem.Remove(link)
+			if err != nil {
+				log.Fatalf("could not remove link: %v", err)
+			}
 		}
 
 		lastFilesToAdd := []string{".gitignore", "SPECS"}
