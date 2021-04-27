@@ -61,8 +61,8 @@ type ModuleMd struct {
 		} `yaml:"license,omitempty"`
 		Xmd          map[string]interface{} `yaml:"xmd,omitempty"`
 		Dependencies []struct {
-			Buildrequires map[string]interface{} `yaml:"buildrequires,omitempty,omitempty"`
-			Requires      map[string]interface{} `yaml:"requires,omitempty,omitempty"`
+			Buildrequires map[string][]string `yaml:"buildrequires,omitempty,omitempty"`
+			Requires      map[string][]string `yaml:"requires,omitempty,omitempty"`
 		} `yaml:"dependencies,omitempty"`
 		References struct {
 			Community     string `yaml:"community,omitempty"`
