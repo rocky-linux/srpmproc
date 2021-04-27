@@ -248,7 +248,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 		}
 	}
 
-	fieldValueRegex := regexp.MustCompile("^[A-Z].+:")
+	fieldValueRegex := regexp.MustCompile("^[a-zA-Z0-9]+:")
 
 	longestField := 0
 	for lineNum, line := range lines {
