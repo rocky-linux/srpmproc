@@ -50,5 +50,6 @@ type ProcessData struct {
 	ManualCommits        []string
 	UpstreamPrefixHttps  string
 	ModuleFallbackStream string
+	AllowStreamBranches  bool
 	FsCreator            func(branch string) billy.Filesystem
 }

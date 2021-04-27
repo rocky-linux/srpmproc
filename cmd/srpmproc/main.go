@@ -63,6 +63,7 @@ var (
 	manualCommits        string
 	upstreamPrefixHttps  string
 	moduleFallbackStream string
+	allowStreamBranches  bool
 )
 
 var root = &cobra.Command{
@@ -168,6 +169,7 @@ func mn(_ *cobra.Command, _ []string) {
 		ManualCommits:        manualCs,
 		UpstreamPrefixHttps:  upstreamPrefixHttps,
 		ModuleFallbackStream: moduleFallbackStream,
+		AllowStreamBranches:  allowStreamBranches,
 		FsCreator:            fsCreator,
 	})
 }
@@ -199,6 +201,7 @@ func main() {
 	root.Flags().StringVar(&manualCommits, "manual-commits", "", "Comma separated branch and commit list for packages with broken release tags (Format: BRANCH:HASH)")
 	root.Flags().StringVar(&upstreamPrefixHttps, "upstream-prefix-https", "", "Web version of upstream prefix. Required if module-mode")
 	root.Flags().StringVar(&moduleFallbackStream, "module-fallback-stream", "", "Override fallback stream. Some module packages are published as collections and mostly use the same stream name, some of them deviate from the main stream")
+	root.Flags().BoolVar(&allowStreamBranches, "allow-stream-branches", false, "Allow import from stream branches")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)

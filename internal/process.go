@@ -59,7 +59,12 @@ func gitlabify(str string) string {
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{Name}.metadata
 func ProcessRPM(pd *data.ProcessData) {
-	tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
+	if pd.AllowStreamBranches {
+		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s(?:.s|.)|%s(?:|s).-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
+	} else {
+		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
+	}
+
 	md := pd.Importer.RetrieveSource(pd)
 	md.BlobCache = map[string][]byte{}
 
