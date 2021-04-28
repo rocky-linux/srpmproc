@@ -207,6 +207,10 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 
 	if tipHash == "" {
 		for _, ref := range list {
+			if strings.Contains(ref.Name().String(), "-bootstrap") {
+				continue
+			}
+
 			prefix := fmt.Sprintf("refs/heads/%s", origPushBranch)
 
 			if strings.HasPrefix(ref.Name().String(), prefix) {
@@ -217,6 +221,10 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 
 	if tipHash == "" {
 		for _, ref := range list {
+			if strings.Contains(ref.Name().String(), "-bootstrap") {
+				continue
+			}
+
 			if !strings.Contains(ref.Name().String(), "stream") {
 				tipHash = ref.Hash().String()
 			}
