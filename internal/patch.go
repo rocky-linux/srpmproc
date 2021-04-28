@@ -184,6 +184,10 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 	var tipHash string
 
 	for _, ref := range list {
+		if strings.Contains(ref.Name().String(), "-bootstrap") {
+			continue
+		}
+
 		prefix := fmt.Sprintf("refs/heads/%s", pushBranch)
 
 		branchVersion := strings.Split(pushBranch, "-")
