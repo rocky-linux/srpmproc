@@ -294,7 +294,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		// versions are not that important
 		if strings.HasPrefix(rpm.Ref, "stream-rhel-rhel-") {
 			pushBranch = defaultBranch
-		} else if strings.HasPrefix(rpm.Ref, "stream-rhel-") {
+		} else if strings.HasPrefix(rpm.Ref, "stream-rhel-") && len(split) > 4 {
 			repString := fmt.Sprintf("%s%ss-", pd.BranchPrefix, string(split[4][0]))
 			newString := fmt.Sprintf("%s%s-", pd.BranchPrefix, string(split[4][0]))
 			pushBranch = strings.Replace(md.PushBranch, repString, newString, 1)
