@@ -16,3 +16,5 @@
 testdata
 srpmproc
 .idea
+dist/
+dist/
