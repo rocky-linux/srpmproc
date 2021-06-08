@@ -4,6 +4,8 @@ before:
 builds:
   - main: ./cmd/srpmproc
     binary: srpmproc
+    ldflags:
+      - -s -w
     env:
       - CGO_ENABLED=0
     goos:
