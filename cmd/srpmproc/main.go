@@ -22,6 +22,12 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/user"
+	"path/filepath"
+	"strings"
+
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-billy/v5/osfs"
@@ -31,11 +37,6 @@ import (
 	"github.com/rocky-linux/srpmproc/internal/blob/gcs"
 	"github.com/rocky-linux/srpmproc/internal/blob/s3"
 	"github.com/rocky-linux/srpmproc/internal/data"
-	"log"
-	"os"
-	"os/user"
-	"path/filepath"
-	"strings"
 
 	"github.com/rocky-linux/srpmproc/internal"
 	"github.com/spf13/cobra"
@@ -116,13 +117,11 @@ func mn(_ *cobra.Command, _ []string) {
 
 	var authenticator *ssh.PublicKeys
 
-	if tmpFsMode == "" {
-		var err error
-		// create ssh key authenticator
-		authenticator, err = ssh.NewPublicKeysFromFile(sshUser, lastKeyLocation, "")
-		if err != nil {
-			log.Fatalf("could not get git authenticator: %v", err)
-		}
+	var err error
+	// create ssh key authenticator
+	authenticator, err = ssh.NewPublicKeysFromFile(sshUser, lastKeyLocation, "")
+	if err != nil {
+		log.Fatalf("could not get git authenticator: %v", err)
 	}
 
 	fsCreator := func(branch string) billy.Filesystem {
