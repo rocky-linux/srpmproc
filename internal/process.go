@@ -60,7 +60,7 @@ func gitlabify(str string) string {
 // all ignored files' hash goes into .{Name}.metadata
 func ProcessRPM(pd *data.ProcessData) {
 	if pd.AllowStreamBranches {
-		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s(?:.s|.)|%s(?:|s).-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
+		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s(?:.s|.)|%s(?:|s).+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	} else {
 		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
 	}
