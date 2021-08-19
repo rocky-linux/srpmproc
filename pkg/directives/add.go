@@ -28,8 +28,8 @@ import (
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/rocky-linux/srpmproc/internal/data"
 	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"github.com/rocky-linux/srpmproc/pkg/data"
 )
 
 // returns right if not empty, else left

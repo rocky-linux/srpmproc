@@ -18,4 +18,54 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package internal
+package directives
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/go-git/go-git/v5"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"github.com/rocky-linux/srpmproc/pkg/data"
+)
+
+func checkAddPrefix(file string) string {
+	if strings.HasPrefix(file, "SOURCES/") ||
+		strings.HasPrefix(file, "SPECS/") {
+		return file
+	}
+
+	return filepath.Join("SOURCES", file)
+}
+
+func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
+	var errs []string
+
+	directives := []func(*srpmprocpb.Cfg, *data.ProcessData, *data.ModeData, *git.Worktree, *git.Worktree) error{
+		replace,
+		del,
+		add,
+		patch,
+		lookaside,
+		specChange,
+	}
+
+	for _, directive := range directives {
+		err := directive(cfg, pd, md, patchTree, pushTree)
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
+	}
+
+	if len(errs) > 0 {
+		err := json.NewEncoder(os.Stdout).Encode(errs)
+		if err != nil {
+			log.Fatal(errs)
+		}
+
+		os.Exit(1)
+	}
+}

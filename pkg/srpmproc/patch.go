@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package internal
+package srpmproc
 
 import (
 	"fmt"
@@ -33,10 +33,10 @@ import (
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/storage/memory"
-	"github.com/rocky-linux/srpmproc/internal/data"
-	"github.com/rocky-linux/srpmproc/internal/directives"
 	"github.com/rocky-linux/srpmproc/modulemd"
 	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"github.com/rocky-linux/srpmproc/pkg/data"
+	"github.com/rocky-linux/srpmproc/pkg/directives"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 

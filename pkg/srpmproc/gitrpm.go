@@ -18,30 +18,34 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package directives
+package srpmproc
 
 import (
-	"errors"
-	"fmt"
-
-	"github.com/go-git/go-git/v5"
-	"github.com/rocky-linux/srpmproc/internal/data"
-	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"github.com/cavaliercoder/go-rpm"
 )
 
-func del(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, _ *git.Worktree, pushTree *git.Worktree) error {
-	for _, del := range cfg.Delete {
-		filePath := del.File
-		_, err := pushTree.Filesystem.Stat(filePath)
-		if err != nil {
-			return errors.New(fmt.Sprintf("FILE_DOES_NOT_EXIST:%s", filePath))
-		}
-
-		err = pushTree.Filesystem.Remove(filePath)
-		if err != nil {
-			return errors.New(fmt.Sprintf("COULD_NOT_DELETE_FILE:%s", filePath))
-		}
+// TODO: ugly hack, should create an interface
+// since GitMode does not parse an RPM file, we just mimick
+// the headers of an actual file to reuse RpmFile.Name()
+func createPackageFile(name string) *rpm.PackageFile {
+	return &rpm.PackageFile{
+		Lead: rpm.Lead{},
+		Headers: []rpm.Header{
+			{},
+			{
+				Version:    0,
+				IndexCount: 1,
+				Length:     1,
+				Indexes: []rpm.IndexEntry{
+					{
+						Tag:       1000,
+						Type:      rpm.IndexDataTypeStringArray,
+						Offset:    0,
+						ItemCount: 1,
+						Value:     []string{name},
+					},
+				},
+			},
+		},
 	}
-
-	return nil
 }

@@ -21,51 +21,27 @@
 package directives
 
 import (
-	"encoding/json"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
+	"errors"
+	"fmt"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/rocky-linux/srpmproc/internal/data"
 	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
+	"github.com/rocky-linux/srpmproc/pkg/data"
 )
 
-func checkAddPrefix(file string) string {
-	if strings.HasPrefix(file, "SOURCES/") ||
-		strings.HasPrefix(file, "SPECS/") {
-		return file
-	}
-
-	return filepath.Join("SOURCES", file)
-}
-
-func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
-	var errs []string
-
-	directives := []func(*srpmprocpb.Cfg, *data.ProcessData, *data.ModeData, *git.Worktree, *git.Worktree) error{
-		replace,
-		del,
-		add,
-		patch,
-		lookaside,
-		specChange,
-	}
-
-	for _, directive := range directives {
-		err := directive(cfg, pd, md, patchTree, pushTree)
+func del(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, _ *git.Worktree, pushTree *git.Worktree) error {
+	for _, del := range cfg.Delete {
+		filePath := del.File
+		_, err := pushTree.Filesystem.Stat(filePath)
 		if err != nil {
-			errs = append(errs, err.Error())
+			return errors.New(fmt.Sprintf("FILE_DOES_NOT_EXIST:%s", filePath))
+		}
+
+		err = pushTree.Filesystem.Remove(filePath)
+		if err != nil {
+			return errors.New(fmt.Sprintf("COULD_NOT_DELETE_FILE:%s", filePath))
 		}
 	}
 
-	if len(errs) > 0 {
-		err := json.NewEncoder(os.Stdout).Encode(errs)
-		if err != nil {
-			log.Fatal(errs)
-		}
-
-		os.Exit(1)
-	}
+	return nil
 }

@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package internal
+package srpmproc
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ import (
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/storage/memory"
-	"github.com/rocky-linux/srpmproc/internal/data"
+	"github.com/rocky-linux/srpmproc/pkg/data"
 )
 
 type SrpmMode struct{}

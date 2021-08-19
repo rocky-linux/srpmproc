@@ -22,6 +22,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"log"
 	"os"
 	"os/user"
@@ -32,13 +33,12 @@ import (
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/rocky-linux/srpmproc/internal/blob"
-	"github.com/rocky-linux/srpmproc/internal/blob/file"
-	"github.com/rocky-linux/srpmproc/internal/blob/gcs"
-	"github.com/rocky-linux/srpmproc/internal/blob/s3"
-	"github.com/rocky-linux/srpmproc/internal/data"
+	"github.com/rocky-linux/srpmproc/pkg/blob"
+	"github.com/rocky-linux/srpmproc/pkg/blob/file"
+	"github.com/rocky-linux/srpmproc/pkg/blob/gcs"
+	"github.com/rocky-linux/srpmproc/pkg/blob/s3"
+	"github.com/rocky-linux/srpmproc/pkg/data"
 
-	"github.com/rocky-linux/srpmproc/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -96,14 +96,14 @@ func mn(_ *cobra.Command, _ []string) {
 	sourceRpmLocation := ""
 	if strings.HasPrefix(sourceRpm, "file://") {
 		sourceRpmLocation = strings.TrimPrefix(sourceRpm, "file://")
-		importer = &internal.SrpmMode{}
+		importer = &srpmproc.SrpmMode{}
 	} else {
 		if moduleMode {
 			sourceRpmLocation = fmt.Sprintf("%s/%s", modulePrefix, sourceRpm)
 		} else {
 			sourceRpmLocation = fmt.Sprintf("%s/%s", rpmPrefix, sourceRpm)
 		}
-		importer = &internal.GitMode{}
+		importer = &srpmproc.GitMode{}
 	}
 
 	lastKeyLocation := sshKeyLocation
@@ -145,7 +145,7 @@ func mn(_ *cobra.Command, _ []string) {
 		manualCs = strings.Split(manualCommits, ",")
 	}
 
-	internal.ProcessRPM(&data.ProcessData{
+	srpmproc.ProcessRPM(&data.ProcessData{
 		Importer:             importer,
 		RpmLocation:          sourceRpmLocation,
 		UpstreamPrefix:       upstreamPrefix,
