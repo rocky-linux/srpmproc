@@ -23,9 +23,11 @@ package s3
 import (
 	"bytes"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/spf13/viper"
 	"io/ioutil"
 	"log"
 )
@@ -36,7 +38,25 @@ type S3 struct {
 }
 
 func New(name string) *S3 {
-	sess := session.Must(session.NewSession())
+	awsCfg := &aws.Config{}
+
+	if accessKey := viper.GetString("s3-access-key"); accessKey != "" {
+		awsCfg.Credentials = credentials.NewStaticCredentials(accessKey, viper.GetString("s3-secret-key"), "")
+	}
+
+	if endpoint := viper.GetString("s3-endpoint"); endpoint != "" {
+		awsCfg.Endpoint = aws.String(endpoint)
+	}
+
+	if region := viper.GetString("s3-region"); region != "" {
+		awsCfg.Region = aws.String(region)
+	}
+
+	if disableSsl := viper.GetBool("s3-disable-ssl"); disableSsl {
+		awsCfg.DisableSSL = aws.Bool(true)
+	}
+
+	sess := session.Must(session.NewSession(awsCfg))
 	uploader := s3manager.NewUploader(sess)
 
 	return &S3{
