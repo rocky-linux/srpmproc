@@ -12,14 +12,9 @@ import (
 	"strings"
 )
 
-func Fetch(cdnUrl string) error {
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
+func Fetch(cdnUrl string, dir string) error {
 	metadataPath := ""
-	err = filepath.Walk(wd, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".metadata") {
 			if metadataPath != "" {
 				return errors.New("multiple metadata files")

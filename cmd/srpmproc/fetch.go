@@ -24,6 +24,7 @@ import (
 	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"github.com/spf13/cobra"
 	"log"
+	"os"
 )
 
 var fetch = &cobra.Command{
@@ -39,7 +40,12 @@ func init() {
 }
 
 func runFetch(_ *cobra.Command, _ []string) {
-	err := srpmproc.Fetch(cdnUrl)
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("could not get working directory: %v", err)
+	}
+
+	err = srpmproc.Fetch(cdnUrl, wd)
 	if err != nil {
 		log.Fatal(err)
 	}
