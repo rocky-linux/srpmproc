@@ -24,9 +24,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/rocky-linux/srpmproc/pkg/blob"
+	"github.com/rocky-linux/srpmproc/pkg/blob/file"
+	"github.com/rocky-linux/srpmproc/pkg/blob/gcs"
+	"github.com/rocky-linux/srpmproc/pkg/blob/s3"
+	"github.com/rocky-linux/srpmproc/pkg/modes"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -41,7 +49,43 @@ import (
 	"github.com/rocky-linux/srpmproc/pkg/data"
 )
 
+const (
+	RpmPrefixCentOS     = "https://git.centos.org/rpms"
+	ModulePrefixCentOS  = "https://git.centos.org/modules"
+	RpmPrefixRocky      = "https://git.rockylinux.org/staging/rpms"
+	ModulePrefixRocky   = "https://git.rockylinux.org/staging/modules"
+	UpstreamPrefixRocky = "https://git.rockylinux.org/staging"
+)
+
 var tagImportRegex *regexp.Regexp
+
+type ProcessDataRequest struct {
+	// Required
+	Version     int
+	StorageAddr string
+	Package     string
+
+	// Optional
+	ModuleMode           bool
+	TmpFsMode            string
+	ModulePrefix         string
+	RpmPrefix            string
+	SshKeyLocation       string
+	SshUser              string
+	ManualCommits        string
+	UpstreamPrefix       string
+	GitCommitterName     string
+	GitCommitterEmail    string
+	ImportBranchPrefix   string
+	BranchPrefix         string
+	FsCreator            data.FsCreatorFunc
+	NoDupMode            bool
+	AllowStreamBranches  bool
+	ModuleFallbackStream string
+	NoStorageUpload      bool
+	NoStorageDownload    bool
+	SingleTag            string
+}
 
 func gitlabify(str string) string {
 	if str == "tree" {
@@ -51,6 +95,144 @@ func gitlabify(str string) string {
 	return strings.Replace(str, "+", "plus", -1)
 }
 
+func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
+	switch req.Version {
+	case 8:
+		break
+	default:
+		return nil, fmt.Errorf("unsupported upstream version %d", req.Version)
+	}
+
+	// Set defaults
+	if req.ModulePrefix == "" {
+		req.ModulePrefix = ModulePrefixCentOS
+	}
+	if req.RpmPrefix == "" {
+		req.RpmPrefix = RpmPrefixCentOS
+	}
+	if req.SshUser == "" {
+		req.SshUser = "git"
+	}
+	if req.UpstreamPrefix == "" {
+		req.UpstreamPrefix = UpstreamPrefixRocky
+	}
+	if req.GitCommitterName == "" {
+		req.GitCommitterName = "rockyautomation"
+	}
+	if req.GitCommitterEmail == "" {
+		req.GitCommitterEmail = "rockyautomation@rockylinux.org"
+	}
+	if req.ImportBranchPrefix == "" {
+		req.ImportBranchPrefix = "c"
+	}
+	if req.BranchPrefix == "" {
+		req.BranchPrefix = "r"
+	}
+
+	// Validate required
+	if req.Package == "" {
+		return nil, fmt.Errorf("package cannot be empty")
+	}
+
+	var importer data.ImportMode
+	var blobStorage blob.Storage
+
+	if strings.HasPrefix(req.StorageAddr, "gs://") {
+		blobStorage = gcs.New(strings.Replace(req.StorageAddr, "gs://", "", 1))
+	} else if strings.HasPrefix(req.StorageAddr, "s3://") {
+		blobStorage = s3.New(strings.Replace(req.StorageAddr, "s3://", "", 1))
+	} else if strings.HasPrefix(req.StorageAddr, "file://") {
+		blobStorage = file.New(strings.Replace(req.StorageAddr, "file://", "", 1))
+	} else {
+		log.Fatalf("invalid blob storage")
+	}
+
+	sourceRpmLocation := ""
+	if req.ModuleMode {
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.ModulePrefix, req.Package)
+	} else {
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.RpmPrefix, req.Package)
+	}
+	importer = &modes.GitMode{}
+
+	lastKeyLocation := req.SshKeyLocation
+	if lastKeyLocation == "" {
+		usr, err := user.Current()
+		if err != nil {
+			log.Fatalf("could not get user: %v", err)
+		}
+		lastKeyLocation = filepath.Join(usr.HomeDir, ".ssh/id_rsa")
+	}
+
+	var authenticator *ssh.PublicKeys
+
+	var err error
+	// create ssh key authenticator
+	authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, "")
+	if err != nil {
+		log.Fatalf("could not get git authenticator: %v", err)
+	}
+
+	fsCreator := func(branch string) (billy.Filesystem, error) {
+		return memfs.New(), nil
+	}
+	if req.FsCreator != nil {
+		fsCreator = req.FsCreator
+	}
+
+	if req.TmpFsMode != "" {
+		log.Printf("using tmpfs dir: %s", req.TmpFsMode)
+		fsCreator = func(branch string) (billy.Filesystem, error) {
+			fs, err := fsCreator(branch)
+			if err != nil {
+				return nil, err
+			}
+			tmpDir := filepath.Join(req.TmpFsMode, branch)
+			err = fs.MkdirAll(tmpDir, 0755)
+			if err != nil {
+				log.Fatalf("could not create tmpfs dir: %v", err)
+			}
+			nFs, err := fs.Chroot(tmpDir)
+			if err != nil {
+				return nil, err
+			}
+
+			return nFs, nil
+		}
+	}
+
+	var manualCs []string
+	if strings.TrimSpace(req.ManualCommits) != "" {
+		manualCs = strings.Split(req.ManualCommits, ",")
+	}
+
+	return &data.ProcessData{
+		Importer:             importer,
+		RpmLocation:          sourceRpmLocation,
+		UpstreamPrefix:       req.UpstreamPrefix,
+		SshKeyLocation:       lastKeyLocation,
+		SshUser:              req.SshUser,
+		Version:              req.Version,
+		BlobStorage:          blobStorage,
+		GitCommitterName:     req.GitCommitterName,
+		GitCommitterEmail:    req.GitCommitterEmail,
+		ModulePrefix:         req.ModulePrefix,
+		ImportBranchPrefix:   req.ImportBranchPrefix,
+		BranchPrefix:         req.BranchPrefix,
+		SingleTag:            req.SingleTag,
+		Authenticator:        authenticator,
+		NoDupMode:            req.NoDupMode,
+		ModuleMode:           req.ModuleMode,
+		TmpFsMode:            req.TmpFsMode,
+		NoStorageDownload:    req.NoStorageDownload,
+		NoStorageUpload:      req.NoStorageUpload,
+		ManualCommits:        manualCs,
+		ModuleFallbackStream: req.ModuleFallbackStream,
+		AllowStreamBranches:  req.AllowStreamBranches,
+		FsCreator:            fsCreator,
+	}, nil
+}
+
 // ProcessRPM checks the RPM specs and discards any remote files
 // This functions also sorts files into directories
 // .spec files goes into -> SPECS
@@ -58,14 +240,11 @@ func gitlabify(str string) string {
 // source files goes into -> SOURCES
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{Name}.metadata
-func ProcessRPM(pd *data.ProcessData) {
-	if pd.AllowStreamBranches {
-		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s(?:.s|.)|%s(?:|s).+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
-	} else {
-		tagImportRegex = regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", pd.ImportBranchPrefix, pd.ImportBranchPrefix))
+func ProcessRPM(pd *data.ProcessData) error {
+	md, err := pd.Importer.RetrieveSource(pd)
+	if err != nil {
+		return err
 	}
-
-	md := pd.Importer.RetrieveSource(pd)
 	md.BlobCache = map[string][]byte{}
 
 	remotePrefix := "rpms"
@@ -83,9 +262,9 @@ func ProcessRPM(pd *data.ProcessData) {
 	if pd.NoDupMode {
 		repo, err := git.Init(memory.NewStorage(), memfs.New())
 		if err != nil {
-			log.Fatalf("could not init git repo: %v", err)
+			return fmt.Errorf("could not init git repo: %v", err)
 		}
-		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.RpmFile.Name()))
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
 
 		remote, err := repo.CreateRemote(&config.RemoteConfig{
@@ -94,7 +273,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			Fetch: []config.RefSpec{refspec},
 		})
 		if err != nil {
-			log.Fatalf("could not create remote: %v", err)
+			return fmt.Errorf("could not create remote: %v", err)
 		}
 
 		list, err := remote.List(&git.ListOptions{
@@ -127,7 +306,7 @@ func ProcessRPM(pd *data.ProcessData) {
 				log.Fatalln("invalid manual commit list")
 			}
 
-			head := fmt.Sprintf("refs/tags/imports/%s/%s-%s", branchCommit[0], md.RpmFile.Name(), branchCommit[1])
+			head := fmt.Sprintf("refs/tags/imports/%s/%s-%s", branchCommit[0], md.Name, branchCommit[1])
 			md.Branches = append(md.Branches, head)
 			commitPin[head] = branchCommit[1]
 		}
@@ -167,15 +346,19 @@ func ProcessRPM(pd *data.ProcessData) {
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 		newTag = strings.Replace(newTag, "%", "_", -1)
 
-		rpmFile := md.RpmFile
-		// create new Repo for final dist
-		repo, err := git.Init(memory.NewStorage(), pd.FsCreator(md.PushBranch))
+		createdFs, err := pd.FsCreator(md.PushBranch)
 		if err != nil {
-			log.Fatalf("could not create new dist Repo: %v", err)
+			return err
+		}
+
+		// create new Repo for final dist
+		repo, err := git.Init(memory.NewStorage(), createdFs)
+		if err != nil {
+			return fmt.Errorf("could not create new dist Repo: %v", err)
 		}
 		w, err := repo.Worktree()
 		if err != nil {
-			log.Fatalf("could not get dist Worktree: %v", err)
+			return fmt.Errorf("could not get dist Worktree: %v", err)
 		}
 
 		shouldContinue := true
@@ -190,7 +373,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		}
 
 		// create a new remote
-		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(rpmFile.Name()))
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
 		log.Printf("using remote: %s", remoteUrl)
 		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.PushBranch, md.PushBranch))
 		log.Printf("using refspec: %s", refspec)
@@ -201,7 +384,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			Fetch: []config.RefSpec{refspec},
 		})
 		if err != nil {
-			log.Fatalf("could not create remote: %v", err)
+			return fmt.Errorf("could not create remote: %v", err)
 		}
 
 		err = repo.Fetch(&git.FetchOptions{
@@ -221,7 +404,7 @@ func ProcessRPM(pd *data.ProcessData) {
 		if err != nil {
 			h := plumbing.NewSymbolicReference(plumbing.HEAD, refName)
 			if err := repo.Storer.CheckAndSetReference(h, nil); err != nil {
-				log.Fatalf("could not set reference: %v", err)
+				return fmt.Errorf("could not set reference: %v", err)
 			}
 		} else {
 			err = w.Checkout(&git.CheckoutOptions{
@@ -230,27 +413,36 @@ func ProcessRPM(pd *data.ProcessData) {
 				Force:  true,
 			})
 			if err != nil {
-				log.Fatalf("could not checkout: %v", err)
+				return fmt.Errorf("could not checkout: %v", err)
 			}
 		}
 
-		pd.Importer.WriteSource(pd, md)
+		err = pd.Importer.WriteSource(pd, md)
+		if err != nil {
+			return err
+		}
 
 		data.CopyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
 		md.Repo = repo
 		md.Worktree = w
 
 		if pd.ModuleMode {
-			patchModuleYaml(pd, md)
+			err := patchModuleYaml(pd, md)
+			if err != nil {
+				return err
+			}
 		} else {
-			executePatchesRpm(pd, md)
+			err := executePatchesRpm(pd, md)
+			if err != nil {
+				return err
+			}
 		}
 
 		// get ignored files hash and add to .{Name}.metadata
-		metadataFile := fmt.Sprintf(".%s.metadata", rpmFile.Name())
+		metadataFile := fmt.Sprintf(".%s.metadata", md.Name)
 		metadata, err := w.Filesystem.Create(metadataFile)
 		if err != nil {
-			log.Fatalf("could not create metadata file: %v", err)
+			return fmt.Errorf("could not create metadata file: %v", err)
 		}
 		for _, source := range md.SourcesToIgnore {
 			sourcePath := source.Name
@@ -262,23 +454,23 @@ func ProcessRPM(pd *data.ProcessData) {
 
 			sourceFile, err := w.Filesystem.Open(sourcePath)
 			if err != nil {
-				log.Fatalf("could not open ignored source file %s: %v", sourcePath, err)
+				return fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
 			}
 			sourceFileBts, err := ioutil.ReadAll(sourceFile)
 			if err != nil {
-				log.Fatalf("could not read the whole of ignored source file: %v", err)
+				return fmt.Errorf("could not read the whole of ignored source file: %v", err)
 			}
 
 			source.HashFunction.Reset()
 			_, err = source.HashFunction.Write(sourceFileBts)
 			if err != nil {
-				log.Fatalf("could not write bytes to hash function: %v", err)
+				return fmt.Errorf("could not write bytes to hash function: %v", err)
 			}
 			checksum := hex.EncodeToString(source.HashFunction.Sum(nil))
 			checksumLine := fmt.Sprintf("%s %s\n", checksum, sourcePath)
 			_, err = metadata.Write([]byte(checksumLine))
 			if err != nil {
-				log.Fatalf("could not write to metadata file: %v", err)
+				return fmt.Errorf("could not write to metadata file: %v", err)
 			}
 
 			if data.StrContains(alreadyUploadedBlobs, checksum) {
@@ -293,7 +485,7 @@ func ProcessRPM(pd *data.ProcessData) {
 
 		_, err = w.Add(metadataFile)
 		if err != nil {
-			log.Fatalf("could not add metadata file: %v", err)
+			return fmt.Errorf("could not add metadata file: %v", err)
 		}
 
 		lastFilesToAdd := []string{".gitignore", "SPECS"}
@@ -302,7 +494,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			if err == nil {
 				_, err := w.Add(f)
 				if err != nil {
-					log.Fatalf("could not add %s: %v", f, err)
+					return fmt.Errorf("could not add %s: %v", f, err)
 				}
 			}
 		}
@@ -311,7 +503,10 @@ func ProcessRPM(pd *data.ProcessData) {
 			continue
 		}
 
-		pd.Importer.PostProcess(md)
+		err = pd.Importer.PostProcess(md)
+		if err != nil {
+			return err
+		}
 
 		// show status
 		status, _ := w.Status()
@@ -324,7 +519,7 @@ func ProcessRPM(pd *data.ProcessData) {
 				path := strings.TrimPrefix(trimmed, "D ")
 				_, err := w.Remove(path)
 				if err != nil {
-					log.Fatalf("could not delete extra file %s: %v", path, err)
+					return fmt.Errorf("could not delete extra file %s: %v", path, err)
 				}
 			}
 		}
@@ -354,12 +549,12 @@ func ProcessRPM(pd *data.ProcessData) {
 			Parents: hashes,
 		})
 		if err != nil {
-			log.Fatalf("could not commit object: %v", err)
+			return fmt.Errorf("could not commit object: %v", err)
 		}
 
 		obj, err := repo.CommitObject(commit)
 		if err != nil {
-			log.Fatalf("could not get commit object: %v", err)
+			return fmt.Errorf("could not get commit object: %v", err)
 		}
 
 		log.Printf("committed:\n%s", obj.String())
@@ -374,7 +569,7 @@ func ProcessRPM(pd *data.ProcessData) {
 			SignKey: nil,
 		})
 		if err != nil {
-			log.Fatalf("could not create tag: %v", err)
+			return fmt.Errorf("could not create tag: %v", err)
 		}
 
 		pushRefspecs = append(pushRefspecs, config.RefSpec("HEAD:"+plumbing.NewTagReferenceName(newTag)))
@@ -386,15 +581,17 @@ func ProcessRPM(pd *data.ProcessData) {
 			Force:      true,
 		})
 		if err != nil {
-			log.Fatalf("could not push to remote: %v", err)
+			return fmt.Errorf("could not push to remote: %v", err)
 		}
 
 		hashString := obj.Hash.String()
 		latestHashForBranch[md.PushBranch] = hashString
 	}
 
-	err := json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
+	err = json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
 	if err != nil {
-		log.Fatalf("could not print hashes")
+		return fmt.Errorf("could not print hashes")
 	}
+
+	return nil
 }

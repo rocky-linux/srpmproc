@@ -234,7 +234,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	hasPatch := false
 
 	version := ""
-	importName := strings.Replace(pd.Importer.ImportName(pd, md), md.RpmFile.Name(), "1", 1)
+	importName := strings.Replace(pd.Importer.ImportName(pd, md), md.Name, "1", 1)
 	importNameSplit := strings.SplitN(importName, "-", 2)
 	if len(importNameSplit) == 2 {
 		versionSplit := strings.SplitN(importNameSplit[1], ".el", 2)

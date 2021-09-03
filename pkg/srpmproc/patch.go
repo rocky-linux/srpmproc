@@ -40,14 +40,14 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
-func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
+func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	// check CFG patches
 	_, err := patchTree.Filesystem.Stat("ROCKY/CFG")
 	if err == nil {
 		// iterate through patches
 		infos, err := patchTree.Filesystem.ReadDir("ROCKY/CFG")
 		if err != nil {
-			log.Fatalf("could not walk patches: %v", err)
+			return fmt.Errorf("could not walk patches: %v", err)
 		}
 
 		for _, info := range infos {
@@ -60,44 +60,51 @@ func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree
 			filePath := filepath.Join("ROCKY/CFG", info.Name())
 			directive, err := patchTree.Filesystem.Open(filePath)
 			if err != nil {
-				log.Fatalf("could not open directive file %s: %v", info.Name(), err)
+				return fmt.Errorf("could not open directive file %s: %v", info.Name(), err)
 			}
 			directiveBytes, err := ioutil.ReadAll(directive)
 			if err != nil {
-				log.Fatalf("could not read directive file: %v", err)
+				return fmt.Errorf("could not read directive file: %v", err)
 			}
 
 			var cfg srpmprocpb.Cfg
 			err = prototext.Unmarshal(directiveBytes, &cfg)
 			if err != nil {
-				log.Fatalf("could not unmarshal cfg file: %v", err)
+				return fmt.Errorf("could not unmarshal cfg file: %v", err)
 			}
 
 			directives.Apply(&cfg, pd, md, patchTree, pushTree)
 		}
 	}
+
+	return nil
 }
 
-func applyPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
+func applyPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	// check if patches exist
 	_, err := patchTree.Filesystem.Stat("ROCKY")
 	if err == nil {
-		cfgPatches(pd, md, patchTree, pushTree)
+		err := cfgPatches(pd, md, patchTree, pushTree)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
+func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) error {
 	// fetch patch repository
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not create new dist Repo: %v", err)
+		return fmt.Errorf("could not create new dist Repo: %v", err)
 	}
 	w, err := repo.Worktree()
 	if err != nil {
-		log.Fatalf("could not get dist Worktree: %v", err)
+		return fmt.Errorf("could not get dist Worktree: %v", err)
 	}
 
-	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, gitlabify(md.RpmFile.Name()))
+	remoteUrl := fmt.Sprintf("%s/patch/%s.git", pd.UpstreamPrefix, gitlabify(md.Name))
 	refspec := config.RefSpec(fmt.Sprintf("+refs/heads/*:refs/remotes/origin/*"))
 
 	_, err = repo.CreateRemote(&config.RemoteConfig{
@@ -106,7 +113,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 		Fetch: []config.RefSpec{refspec},
 	})
 	if err != nil {
-		log.Fatalf("could not create remote: %v", err)
+		return fmt.Errorf("could not create remote: %v", err)
 	}
 
 	fetchOptions := &git.FetchOptions{
@@ -124,7 +131,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 	if err != nil {
 		// no patches active
 		log.Println("info: patch repo not found")
-		return
+		return nil
 	} else {
 		err = w.Checkout(&git.CheckoutOptions{
 			Branch: plumbing.NewRemoteReferenceName("origin", "main"),
@@ -132,7 +139,10 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 		})
 		// common patches found, apply them
 		if err == nil {
-			applyPatches(pd, md, w, md.Worktree)
+			err := applyPatches(pd, md, w, md.Worktree)
+			if err != nil {
+				return err
+			}
 		} else {
 			log.Println("info: no common patches found")
 		}
@@ -143,17 +153,22 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) {
 		})
 		// branch specific patches found, apply them
 		if err == nil {
-			applyPatches(pd, md, w, md.Worktree)
+			err := applyPatches(pd, md, w, md.Worktree)
+			if err != nil {
+				return err
+			}
 		} else {
 			log.Println("info: no branch specific patches found")
 		}
 	}
+
+	return nil
 }
 
-func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPushBranch string, tries int) string {
+func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPushBranch string, tries int) (string, error) {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not init git Repo: %v", err)
+		return "", fmt.Errorf("could not init git Repo: %v", err)
 	}
 
 	remoteUrl := fmt.Sprintf("%s/rpms/%s.git", pd.UpstreamPrefix, gitlabify(module))
@@ -164,7 +179,7 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		Fetch: []config.RefSpec{refspec},
 	})
 	if err != nil {
-		log.Fatalf("could not create remote: %v", err)
+		return "", fmt.Errorf("could not create remote: %v", err)
 	}
 
 	list, err := remote.List(&git.ListOptions{
@@ -178,7 +193,7 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 			return getTipStream(pd, module, pushBranch, origPushBranch, tries+1)
 		}
 
-		log.Fatalf("could not get rpm refs. import the rpm before the module: %v", err)
+		return "", fmt.Errorf("could not get rpm refs. import the rpm before the module: %v", err)
 	}
 
 	var tipHash string
@@ -238,14 +253,14 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		log.Fatal("could not find tip hash")
 	}
 
-	return strings.TrimSpace(tipHash)
+	return strings.TrimSpace(tipHash), nil
 }
 
-func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
+func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 	// special case for platform.yaml
 	_, err := md.Worktree.Filesystem.Open("platform.yaml")
 	if err == nil {
-		return
+		return nil
 	}
 
 	mdTxtPath := "SOURCES/modulemd.src.txt"
@@ -254,18 +269,18 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 		mdTxtPath = "SOURCES/modulemd.txt"
 		f, err = md.Worktree.Filesystem.Open(mdTxtPath)
 		if err != nil {
-			log.Fatalf("could not open modulemd file: %v", err)
+			return fmt.Errorf("could not open modulemd file: %v", err)
 		}
 	}
 
 	content, err := ioutil.ReadAll(f)
 	if err != nil {
-		log.Fatalf("could not read modulemd file: %v", err)
+		return fmt.Errorf("could not read modulemd file: %v", err)
 	}
 
 	module, err := modulemd.Parse(content)
 	if err != nil {
-		log.Fatalf("could not parse modulemd file: %v", err)
+		return fmt.Errorf("could not parse modulemd file: %v", err)
 	}
 
 	// Get stream branch from tag
@@ -311,23 +326,31 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) {
 			log.Fatal("could not recognize modulemd ref")
 		}
 
-		tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+		tipHash, err = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+		if err != nil {
+			return err
+		}
 		if tipHash == "0000000000000000000000000000000000000000" {
 			pushBranch = defaultBranch
-			tipHash = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+			tipHash, err = getTipStream(pd, name, pushBranch, md.PushBranch, 0)
+			if err != nil {
+				return err
+			}
 		}
 
 		rpm.Ref = tipHash
 	}
 
-	rootModule := fmt.Sprintf("%s.yaml", md.RpmFile.Name())
+	rootModule := fmt.Sprintf("%s.yaml", md.Name)
 	err = module.Marshal(md.Worktree.Filesystem, rootModule)
 	if err != nil {
-		log.Fatalf("could not marshal root modulemd: %v", err)
+		return fmt.Errorf("could not marshal root modulemd: %v", err)
 	}
 
 	_, err = md.Worktree.Add(rootModule)
 	if err != nil {
-		log.Fatalf("could not add root modulemd: %v", err)
+		return fmt.Errorf("could not add root modulemd: %v", err)
 	}
+
+	return nil
 }

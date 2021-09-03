@@ -26,6 +26,8 @@ import (
 	"github.com/rocky-linux/srpmproc/pkg/blob"
 )
 
+type FsCreatorFunc func(branch string) (billy.Filesystem, error)
+
 type ProcessData struct {
 	RpmLocation          string
 	UpstreamPrefix       string
@@ -48,8 +50,7 @@ type ProcessData struct {
 	NoStorageDownload    bool
 	NoStorageUpload      bool
 	ManualCommits        []string
-	UpstreamPrefixHttps  string
 	ModuleFallbackStream string
 	AllowStreamBranches  bool
-	FsCreator            func(branch string) billy.Filesystem
+	FsCreator            FsCreatorFunc
 }

@@ -18,10 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-package srpmproc
+package modes
 
 import (
 	"fmt"
+	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -60,15 +61,15 @@ func (p remoteTargetSlice) Swap(i, j int) {
 
 type GitMode struct{}
 
-func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
+func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
-		log.Fatalf("could not init git Repo: %v", err)
+		return nil, fmt.Errorf("could not init git Repo: %v", err)
 	}
 
 	w, err := repo.Worktree()
 	if err != nil {
-		log.Fatalf("could not get Worktree: %v", err)
+		return nil, fmt.Errorf("could not get Worktree: %v", err)
 	}
 
 	refspec := config.RefSpec("+refs/heads/*:refs/remotes/*")
@@ -78,7 +79,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 		Fetch: []config.RefSpec{refspec},
 	})
 	if err != nil {
-		log.Fatalf("could not create remote: %v", err)
+		return nil, fmt.Errorf("could not create remote: %v", err)
 	}
 
 	err = remote.Fetch(&git.FetchOptions{
@@ -87,7 +88,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 		Force:    true,
 	})
 	if err != nil {
-		log.Fatalf("could not fetch upstream: %v", err)
+		return nil, fmt.Errorf("could not fetch upstream: %v", err)
 	}
 
 	var branches remoteTargetSlice
@@ -97,8 +98,8 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	tagAdd := func(tag *object.Tag) error {
 		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/%s%d", pd.ImportBranchPrefix, pd.Version)) {
 			refSpec := fmt.Sprintf("refs/tags/%s", tag.Name)
-			if tagImportRegex.MatchString(refSpec) {
-				match := tagImportRegex.FindStringSubmatch(refSpec)
+			if misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(refSpec) {
+				match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(refSpec)
 
 				exists := latestTags[match[2]]
 				if exists != nil && exists.when.After(tag.Tagger.When) {
@@ -116,13 +117,13 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 
 	tagIter, err := repo.TagObjects()
 	if err != nil {
-		log.Fatalf("could not get tag objects: %v", err)
+		return nil, fmt.Errorf("could not get tag objects: %v", err)
 	}
 	_ = tagIter.ForEach(tagAdd)
 
 	list, err := remote.List(&git.ListOptions{})
 	if err != nil {
-		log.Fatalf("could not list upstream: %v", err)
+		return nil, fmt.Errorf("could not list upstream: %v", err)
 	}
 
 	for _, ref := range list {
@@ -153,18 +154,18 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) *data.ModeData {
 	}
 
 	return &data.ModeData{
+		Name:       filepath.Base(pd.RpmLocation),
 		Repo:       repo,
 		Worktree:   w,
-		RpmFile:    createPackageFile(filepath.Base(pd.RpmLocation)),
 		FileWrites: nil,
 		Branches:   sortedBranches,
-	}
+	}, nil
 }
 
-func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
+func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 	remote, err := md.Repo.Remote("upstream")
 	if err != nil {
-		log.Fatalf("could not get upstream remote: %v", err)
+		return fmt.Errorf("could not get upstream remote: %v", err)
 	}
 
 	var refspec config.RefSpec
@@ -174,7 +175,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
 		branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
 	} else {
-		match := tagImportRegex.FindStringSubmatch(md.TagBranch)
+		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(md.TagBranch)
 		branchName = match[2]
 		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
 	}
@@ -186,7 +187,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 		Force:      true,
 	})
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		log.Fatalf("could not fetch upstream: %v", err)
+		return fmt.Errorf("could not fetch upstream: %v", err)
 	}
 
 	err = md.Worktree.Checkout(&git.CheckoutOptions{
@@ -194,23 +195,23 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 		Force:  true,
 	})
 	if err != nil {
-		log.Fatalf("could not checkout source from git: %v", err)
+		return fmt.Errorf("could not checkout source from git: %v", err)
 	}
 
 	_, err = md.Worktree.Add(".")
 	if err != nil {
-		log.Fatalf("could not add Worktree: %v", err)
+		return fmt.Errorf("could not add Worktree: %v", err)
 	}
 
-	metadataFile, err := md.Worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.RpmFile.Name()))
+	metadataFile, err := md.Worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.Name))
 	if err != nil {
 		log.Printf("warn: could not open metadata file, so skipping: %v", err)
-		return
+		return nil
 	}
 
 	fileBytes, err := ioutil.ReadAll(metadataFile)
 	if err != nil {
-		log.Fatalf("could not read metadata file: %v", err)
+		return fmt.Errorf("could not read metadata file: %v", err)
 	}
 
 	client := &http.Client{
@@ -239,27 +240,27 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 				body = fromBlobStorage
 				log.Printf("downloading %s from blob storage", hash)
 			} else {
-				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.RpmFile.Name(), branchName, hash)
+				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.Name, branchName, hash)
 				log.Printf("downloading %s", url)
 
 				req, err := http.NewRequest("GET", url, nil)
 				if err != nil {
-					log.Fatalf("could not create new http request: %v", err)
+					return fmt.Errorf("could not create new http request: %v", err)
 				}
 				req.Header.Set("Accept-Encoding", "*")
 
 				resp, err := client.Do(req)
 				if err != nil {
-					log.Fatalf("could not download dist-git file: %v", err)
+					return fmt.Errorf("could not download dist-git file: %v", err)
 				}
 
 				body, err = ioutil.ReadAll(resp.Body)
 				if err != nil {
-					log.Fatalf("could not read the whole dist-git file: %v", err)
+					return fmt.Errorf("could not read the whole dist-git file: %v", err)
 				}
 				err = resp.Body.Close()
 				if err != nil {
-					log.Fatalf("could not close body handle: %v", err)
+					return fmt.Errorf("could not close body handle: %v", err)
 				}
 			}
 
@@ -268,7 +269,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 
 		f, err := md.Worktree.Filesystem.Create(path)
 		if err != nil {
-			log.Fatalf("could not open file pointer: %v", err)
+			return fmt.Errorf("could not open file pointer: %v", err)
 		}
 
 		hasher := data.CompareHash(body, hash)
@@ -283,32 +284,36 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) {
 
 		_, err = f.Write(body)
 		if err != nil {
-			log.Fatalf("could not copy dist-git file to in-tree: %v", err)
+			return fmt.Errorf("could not copy dist-git file to in-tree: %v", err)
 		}
 		_ = f.Close()
 	}
+
+	return nil
 }
 
-func (g *GitMode) PostProcess(md *data.ModeData) {
+func (g *GitMode) PostProcess(md *data.ModeData) error {
 	for _, source := range md.SourcesToIgnore {
 		_, err := md.Worktree.Filesystem.Stat(source.Name)
 		if err == nil {
 			err := md.Worktree.Filesystem.Remove(source.Name)
 			if err != nil {
-				log.Fatalf("could not remove dist-git file: %v", err)
+				return fmt.Errorf("could not remove dist-git file: %v", err)
 			}
 		}
 	}
 
 	_, err := md.Worktree.Add(".")
 	if err != nil {
-		log.Fatalf("could not add git sources: %v", err)
+		return fmt.Errorf("could not add git sources: %v", err)
 	}
+
+	return nil
 }
 
-func (g *GitMode) ImportName(_ *data.ProcessData, md *data.ModeData) string {
-	if tagImportRegex.MatchString(md.TagBranch) {
-		match := tagImportRegex.FindStringSubmatch(md.TagBranch)
+func (g *GitMode) ImportName(pd *data.ProcessData, md *data.ModeData) string {
+	if misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(md.TagBranch) {
+		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(md.TagBranch)
 		return match[3]
 	}
 
