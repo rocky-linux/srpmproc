@@ -21,8 +21,10 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -84,10 +86,16 @@ func mn(_ *cobra.Command, _ []string) {
 		log.Fatal(err)
 	}
 
-	err = srpmproc.ProcessRPM(pd)
+	latestHashForBranch, err := srpmproc.ProcessRPM(pd)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 func main() {

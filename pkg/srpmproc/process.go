@@ -22,7 +22,6 @@ package srpmproc
 
 import (
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -33,7 +32,6 @@ import (
 	"github.com/rocky-linux/srpmproc/pkg/modes"
 	"io/ioutil"
 	"log"
-	"os"
 	"os/user"
 	"path/filepath"
 	"regexp"
@@ -240,10 +238,10 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 // source files goes into -> SOURCES
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{Name}.metadata
-func ProcessRPM(pd *data.ProcessData) error {
+func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 	md, err := pd.Importer.RetrieveSource(pd)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	md.BlobCache = map[string][]byte{}
 
@@ -262,7 +260,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 	if pd.NoDupMode {
 		repo, err := git.Init(memory.NewStorage(), memfs.New())
 		if err != nil {
-			return fmt.Errorf("could not init git repo: %v", err)
+			return nil, fmt.Errorf("could not init git repo: %v", err)
 		}
 		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
 		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
@@ -273,7 +271,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 			Fetch: []config.RefSpec{refspec},
 		})
 		if err != nil {
-			return fmt.Errorf("could not create remote: %v", err)
+			return nil, fmt.Errorf("could not create remote: %v", err)
 		}
 
 		list, err := remote.List(&git.ListOptions{
@@ -348,17 +346,17 @@ func ProcessRPM(pd *data.ProcessData) error {
 
 		createdFs, err := pd.FsCreator(md.PushBranch)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// create new Repo for final dist
 		repo, err := git.Init(memory.NewStorage(), createdFs)
 		if err != nil {
-			return fmt.Errorf("could not create new dist Repo: %v", err)
+			return nil, fmt.Errorf("could not create new dist Repo: %v", err)
 		}
 		w, err := repo.Worktree()
 		if err != nil {
-			return fmt.Errorf("could not get dist Worktree: %v", err)
+			return nil, fmt.Errorf("could not get dist Worktree: %v", err)
 		}
 
 		shouldContinue := true
@@ -384,7 +382,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 			Fetch: []config.RefSpec{refspec},
 		})
 		if err != nil {
-			return fmt.Errorf("could not create remote: %v", err)
+			return nil, fmt.Errorf("could not create remote: %v", err)
 		}
 
 		err = repo.Fetch(&git.FetchOptions{
@@ -404,7 +402,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 		if err != nil {
 			h := plumbing.NewSymbolicReference(plumbing.HEAD, refName)
 			if err := repo.Storer.CheckAndSetReference(h, nil); err != nil {
-				return fmt.Errorf("could not set reference: %v", err)
+				return nil, fmt.Errorf("could not set reference: %v", err)
 			}
 		} else {
 			err = w.Checkout(&git.CheckoutOptions{
@@ -413,13 +411,13 @@ func ProcessRPM(pd *data.ProcessData) error {
 				Force:  true,
 			})
 			if err != nil {
-				return fmt.Errorf("could not checkout: %v", err)
+				return nil, fmt.Errorf("could not checkout: %v", err)
 			}
 		}
 
 		err = pd.Importer.WriteSource(pd, md)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		data.CopyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
@@ -429,12 +427,12 @@ func ProcessRPM(pd *data.ProcessData) error {
 		if pd.ModuleMode {
 			err := patchModuleYaml(pd, md)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		} else {
 			err := executePatchesRpm(pd, md)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
@@ -442,7 +440,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 		metadataFile := fmt.Sprintf(".%s.metadata", md.Name)
 		metadata, err := w.Filesystem.Create(metadataFile)
 		if err != nil {
-			return fmt.Errorf("could not create metadata file: %v", err)
+			return nil, fmt.Errorf("could not create metadata file: %v", err)
 		}
 		for _, source := range md.SourcesToIgnore {
 			sourcePath := source.Name
@@ -454,23 +452,23 @@ func ProcessRPM(pd *data.ProcessData) error {
 
 			sourceFile, err := w.Filesystem.Open(sourcePath)
 			if err != nil {
-				return fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
+				return nil, fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
 			}
 			sourceFileBts, err := ioutil.ReadAll(sourceFile)
 			if err != nil {
-				return fmt.Errorf("could not read the whole of ignored source file: %v", err)
+				return nil, fmt.Errorf("could not read the whole of ignored source file: %v", err)
 			}
 
 			source.HashFunction.Reset()
 			_, err = source.HashFunction.Write(sourceFileBts)
 			if err != nil {
-				return fmt.Errorf("could not write bytes to hash function: %v", err)
+				return nil, fmt.Errorf("could not write bytes to hash function: %v", err)
 			}
 			checksum := hex.EncodeToString(source.HashFunction.Sum(nil))
 			checksumLine := fmt.Sprintf("%s %s\n", checksum, sourcePath)
 			_, err = metadata.Write([]byte(checksumLine))
 			if err != nil {
-				return fmt.Errorf("could not write to metadata file: %v", err)
+				return nil, fmt.Errorf("could not write to metadata file: %v", err)
 			}
 
 			if data.StrContains(alreadyUploadedBlobs, checksum) {
@@ -485,7 +483,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 
 		_, err = w.Add(metadataFile)
 		if err != nil {
-			return fmt.Errorf("could not add metadata file: %v", err)
+			return nil, fmt.Errorf("could not add metadata file: %v", err)
 		}
 
 		lastFilesToAdd := []string{".gitignore", "SPECS"}
@@ -494,7 +492,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 			if err == nil {
 				_, err := w.Add(f)
 				if err != nil {
-					return fmt.Errorf("could not add %s: %v", f, err)
+					return nil, fmt.Errorf("could not add %s: %v", f, err)
 				}
 			}
 		}
@@ -505,7 +503,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 
 		err = pd.Importer.PostProcess(md)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// show status
@@ -519,7 +517,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 				path := strings.TrimPrefix(trimmed, "D ")
 				_, err := w.Remove(path)
 				if err != nil {
-					return fmt.Errorf("could not delete extra file %s: %v", path, err)
+					return nil, fmt.Errorf("could not delete extra file %s: %v", path, err)
 				}
 			}
 		}
@@ -549,12 +547,12 @@ func ProcessRPM(pd *data.ProcessData) error {
 			Parents: hashes,
 		})
 		if err != nil {
-			return fmt.Errorf("could not commit object: %v", err)
+			return nil, fmt.Errorf("could not commit object: %v", err)
 		}
 
 		obj, err := repo.CommitObject(commit)
 		if err != nil {
-			return fmt.Errorf("could not get commit object: %v", err)
+			return nil, fmt.Errorf("could not get commit object: %v", err)
 		}
 
 		log.Printf("committed:\n%s", obj.String())
@@ -569,7 +567,7 @@ func ProcessRPM(pd *data.ProcessData) error {
 			SignKey: nil,
 		})
 		if err != nil {
-			return fmt.Errorf("could not create tag: %v", err)
+			return nil, fmt.Errorf("could not create tag: %v", err)
 		}
 
 		pushRefspecs = append(pushRefspecs, config.RefSpec("HEAD:"+plumbing.NewTagReferenceName(newTag)))
@@ -581,17 +579,12 @@ func ProcessRPM(pd *data.ProcessData) error {
 			Force:      true,
 		})
 		if err != nil {
-			return fmt.Errorf("could not push to remote: %v", err)
+			return nil, fmt.Errorf("could not push to remote: %v", err)
 		}
 
 		hashString := obj.Hash.String()
 		latestHashForBranch[md.PushBranch] = hashString
 	}
 
-	err = json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
-	if err != nil {
-		return fmt.Errorf("could not print hashes")
-	}
-
-	return nil
+	return latestHashForBranch, nil
 }
