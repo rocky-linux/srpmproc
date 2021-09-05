@@ -83,6 +83,7 @@ type ProcessDataRequest struct {
 	NoStorageUpload      bool
 	NoStorageDownload    bool
 	SingleTag            string
+	CdnUrl               string
 }
 
 func gitlabify(str string) string {
@@ -125,6 +126,9 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	}
 	if req.BranchPrefix == "" {
 		req.BranchPrefix = "r"
+	}
+	if req.CdnUrl == "" {
+		req.CdnUrl = "https://git.centos.org/sources"
 	}
 
 	// Validate required

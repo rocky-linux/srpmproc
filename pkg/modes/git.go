@@ -240,7 +240,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 				body = fromBlobStorage
 				log.Printf("downloading %s from blob storage", hash)
 			} else {
-				url := fmt.Sprintf("https://git.centos.org/sources/%s/%s/%s", md.Name, branchName, hash)
+				url := fmt.Sprintf("%s/%s/%s/%s", pd.CdnUrl, md.Name, branchName, hash)
 				log.Printf("downloading %s", url)
 
 				req, err := http.NewRequest("GET", url, nil)

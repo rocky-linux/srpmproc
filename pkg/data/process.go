@@ -53,4 +53,5 @@ type ProcessData struct {
 	ModuleFallbackStream string
 	AllowStreamBranches  bool
 	FsCreator            FsCreatorFunc
+	CdnUrl               string
 }
