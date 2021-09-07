@@ -424,7 +424,10 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 			return nil, err
 		}
 
-		data.CopyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
+		err = data.CopyFromFs(md.Worktree.Filesystem, w.Filesystem, ".")
+		if err != nil {
+			return nil, err
+		}
 		md.Repo = repo
 		md.Worktree = w
 

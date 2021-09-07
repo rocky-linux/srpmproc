@@ -26,6 +26,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"fmt"
 	"github.com/go-git/go-billy/v5"
 	"hash"
 	"io"
@@ -34,10 +35,10 @@ import (
 	"path/filepath"
 )
 
-func CopyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
+func CopyFromFs(from billy.Filesystem, to billy.Filesystem, path string) error {
 	read, err := from.ReadDir(path)
 	if err != nil {
-		log.Fatalf("could not read dir: %v", err)
+		return fmt.Errorf("could not read dir: %v", err)
 	}
 
 	for _, fi := range read {
@@ -45,26 +46,31 @@ func CopyFromFs(from billy.Filesystem, to billy.Filesystem, path string) {
 
 		if fi.IsDir() {
 			_ = to.MkdirAll(fullPath, 0755)
-			CopyFromFs(from, to, fullPath)
+			err := CopyFromFs(from, to, fullPath)
+			if err != nil {
+				return err
+			}
 		} else {
 			_ = to.Remove(fullPath)
 
 			f, err := to.OpenFile(fullPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fi.Mode())
 			if err != nil {
-				log.Fatalf("could not open file: %v", err)
+				return fmt.Errorf("could not open file: %v", err)
 			}
 
 			oldFile, err := from.Open(fullPath)
 			if err != nil {
-				log.Fatalf("could not open from file: %v", err)
+				return fmt.Errorf("could not open from file: %v", err)
 			}
 
 			_, err = io.Copy(f, oldFile)
 			if err != nil {
-				log.Fatalf("could not copy from oldFile to new: %v", err)
+				return fmt.Errorf("could not copy from oldFile to new: %v", err)
 			}
 		}
 	}
+
+	return nil
 }
 
 func IgnoredContains(a []*IgnoredSource, b string) bool {
