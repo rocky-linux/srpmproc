@@ -25,16 +25,18 @@ import (
 	"fmt"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 	"github.com/rocky-linux/srpmproc/pkg/blob"
 	"github.com/rocky-linux/srpmproc/pkg/blob/file"
 	"github.com/rocky-linux/srpmproc/pkg/blob/gcs"
 	"github.com/rocky-linux/srpmproc/pkg/blob/s3"
+	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"github.com/rocky-linux/srpmproc/pkg/modes"
+	"github.com/rocky-linux/srpmproc/pkg/rpmutils"
 	"io/ioutil"
 	"log"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -54,8 +56,6 @@ const (
 	ModulePrefixRocky   = "https://git.rockylinux.org/staging/modules"
 	UpstreamPrefixRocky = "https://git.rockylinux.org/staging"
 )
-
-var tagImportRegex *regexp.Regexp
 
 type ProcessDataRequest struct {
 	// Required
@@ -178,14 +178,15 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	fsCreator := func(branch string) (billy.Filesystem, error) {
 		return memfs.New(), nil
 	}
+	reqFsCreator := fsCreator
 	if req.FsCreator != nil {
-		fsCreator = req.FsCreator
+		reqFsCreator = req.FsCreator
 	}
 
 	if req.TmpFsMode != "" {
 		log.Printf("using tmpfs dir: %s", req.TmpFsMode)
 		fsCreator = func(branch string) (billy.Filesystem, error) {
-			fs, err := fsCreator(branch)
+			fs, err := reqFsCreator(branch)
 			if err != nil {
 				return nil, err
 			}
@@ -201,6 +202,8 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 
 			return nFs, nil
 		}
+	} else {
+		fsCreator = reqFsCreator
 	}
 
 	var manualCs []string
@@ -232,6 +235,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		ModuleFallbackStream: req.ModuleFallbackStream,
 		AllowStreamBranches:  req.AllowStreamBranches,
 		FsCreator:            fsCreator,
+		CdnUrl:               req.CdnUrl,
 	}, nil
 }
 
@@ -242,7 +246,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 // source files goes into -> SOURCES
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{Name}.metadata
-func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
+func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 	md, err := pd.Importer.RetrieveSource(pd)
 	if err != nil {
 		return nil, err
@@ -255,6 +259,7 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 	}
 
 	latestHashForBranch := map[string]string{}
+	versionForBranch := map[string]*srpmprocpb.VersionRelease{}
 
 	// already uploaded blobs are skipped
 	var alreadyUploadedBlobs []string
@@ -327,7 +332,7 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 		}
 
 		var matchString string
-		if !tagImportRegex.MatchString(md.TagBranch) {
+		if !misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(md.TagBranch) {
 			if pd.ModuleMode {
 				prefix := fmt.Sprintf("refs/heads/%s%d", pd.ImportBranchPrefix, pd.Version)
 				if strings.HasPrefix(md.TagBranch, prefix) {
@@ -336,14 +341,14 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 					log.Printf("using match string: %s", matchString)
 				}
 			}
-			if !tagImportRegex.MatchString(matchString) {
+			if !misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(matchString) {
 				continue
 			}
 		} else {
 			matchString = md.TagBranch
 		}
 
-		match := tagImportRegex.FindStringSubmatch(matchString)
+		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(matchString)
 		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 		newTag = strings.Replace(newTag, "%", "_", -1)
@@ -504,6 +509,14 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 			}
 		}
 
+		nvrMatch := rpmutils.Nvr.FindStringSubmatch(match[3])
+		if len(nvrMatch) >= 4 {
+			versionForBranch[md.PushBranch] = &srpmprocpb.VersionRelease{
+				Version: nvrMatch[2],
+				Release: nvrMatch[3],
+			}
+		}
+
 		if pd.TmpFsMode != "" {
 			continue
 		}
@@ -593,5 +606,8 @@ func ProcessRPM(pd *data.ProcessData) (map[string]string, error) {
 		latestHashForBranch[md.PushBranch] = hashString
 	}
 
-	return latestHashForBranch, nil
+	return &srpmprocpb.ProcessResponse{
+		BranchCommits:  latestHashForBranch,
+		BranchVersions: versionForBranch,
+	}, nil
 }

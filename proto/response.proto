@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "github.com/rocky-linux/srpmproc/pb;srpmprocpb";
+
+package srpmproc;
+
+message VersionRelease {
+  string version = 1;
+  string release = 2;
+}
+
+message ProcessResponse {
+  map<string, string> branch_commits = 1;
+  map<string, VersionRelease> branch_versions = 2;
+}

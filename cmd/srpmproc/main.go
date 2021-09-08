@@ -81,17 +81,18 @@ func mn(_ *cobra.Command, _ []string) {
 		NoStorageUpload:      noStorageUpload,
 		NoStorageDownload:    noStorageDownload,
 		SingleTag:            singleTag,
+		CdnUrl:               cdnUrl,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	latestHashForBranch, err := srpmproc.ProcessRPM(pd)
+	res, err := srpmproc.ProcessRPM(pd)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = json.NewEncoder(os.Stdout).Encode(latestHashForBranch)
+	err = json.NewEncoder(os.Stdout).Encode(res)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -116,6 +117,7 @@ func main() {
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
 	root.Flags().StringVar(&importBranchPrefix, "import-branch-prefix", "c", "Import branch prefix")
 	root.Flags().StringVar(&branchPrefix, "branch-prefix", "r", "Branch prefix (replaces import-branch-prefix)")
+	root.Flags().StringVar(&cdnUrl, "cdn-url", "https://git.centos.org/sources", "CDN URL to download blobs from")
 	root.Flags().StringVar(&singleTag, "single-tag", "", "If set, only this tag is imported")
 	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
 	root.Flags().BoolVar(&moduleMode, "module-mode", false, "If enabled, imports a module instead of a package")

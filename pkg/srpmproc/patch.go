@@ -22,6 +22,7 @@ package srpmproc
 
 import (
 	"fmt"
+	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -284,7 +285,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 	}
 
 	// Get stream branch from tag
-	match := tagImportRegex.FindStringSubmatch(md.TagBranch)
+	match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(md.TagBranch)
 	streamBranch := strings.Split(match[2], "-")
 	// Force stream to be the same as stream name in branch
 	module.Data.Stream = streamBranch[len(streamBranch)-1]

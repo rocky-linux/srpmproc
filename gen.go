@@ -18,5 +18,5 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//go:generate protoc -Iproto --go_opt=paths=source_relative --go_out=pb proto/cfg.proto
+//go:generate protoc -Iproto --go_opt=paths=source_relative --go_out=pb proto/cfg.proto proto/response.proto
 package srpmproc
