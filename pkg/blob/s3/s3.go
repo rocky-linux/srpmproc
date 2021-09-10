@@ -55,6 +55,10 @@ func New(name string) *S3 {
 		awsCfg.DisableSSL = aws.Bool(true)
 	}
 
+	if forcePathStyle := viper.GetBool("s3-force-path-style"); forcePathStyle {
+		awsCfg.S3ForcePathStyle = aws.Bool(true)
+	}
+
 	sess := session.Must(session.NewSession(awsCfg))
 	uploader := s3manager.NewUploader(sess)
 
