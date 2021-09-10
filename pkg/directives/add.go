@@ -62,7 +62,11 @@ func add(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree
 			break
 		case *srpmprocpb.Add_Lookaside:
 			filePath = checkAddPrefix(eitherString(filepath.Base(addType.Lookaside), add.Name))
-			replacingBytes = pd.BlobStorage.Read(addType.Lookaside)
+			var err error
+			replacingBytes, err = pd.BlobStorage.Read(addType.Lookaside)
+			if err != nil {
+				return err
+			}
 
 			hashFunction := data.CompareHash(replacingBytes, addType.Lookaside)
 			if hashFunction == nil {

@@ -29,7 +29,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/spf13/viper"
 	"io/ioutil"
-	"log"
 )
 
 type S3 struct {
@@ -65,7 +64,7 @@ func New(name string) *S3 {
 	}
 }
 
-func (s *S3) Write(path string, content []byte) {
+func (s *S3) Write(path string, content []byte) error {
 	buf := bytes.NewBuffer(content)
 
 	_, err := s.uploader.Upload(&s3manager.UploadInput{
@@ -74,31 +73,33 @@ func (s *S3) Write(path string, content []byte) {
 		Body:   buf,
 	})
 	if err != nil {
-		log.Fatalf("failed to upload file to s3, %v", err)
+		return err
 	}
+
+	return nil
 }
 
-func (s *S3) Read(path string) []byte {
+func (s *S3) Read(path string) ([]byte, error) {
 	obj, err := s.uploader.S3.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(path),
 	})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(obj.Body)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return body
+	return body, nil
 }
 
-func (s *S3) Exists(path string) bool {
+func (s *S3) Exists(path string) (bool, error) {
 	_, err := s.uploader.S3.GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(path),
 	})
-	return err == nil
+	return err == nil, nil
 }

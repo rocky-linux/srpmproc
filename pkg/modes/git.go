@@ -235,7 +235,10 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 			body = md.BlobCache[hash]
 			log.Printf("retrieving %s from cache", hash)
 		} else {
-			fromBlobStorage := pd.BlobStorage.Read(hash)
+			fromBlobStorage, err := pd.BlobStorage.Read(hash)
+			if err != nil {
+				return err
+			}
 			if fromBlobStorage != nil && !pd.NoStorageDownload {
 				body = fromBlobStorage
 				log.Printf("downloading %s from blob storage", hash)
@@ -274,7 +277,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 		hasher := data.CompareHash(body, hash)
 		if hasher == nil {
-			log.Fatal("checksum in metadata does not match dist-git file")
+			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}
 
 		md.SourcesToIgnore = append(md.SourcesToIgnore, &data.IgnoredSource{

@@ -21,10 +21,12 @@
 package srpmproc
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -74,7 +76,15 @@ func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree
 				return fmt.Errorf("could not unmarshal cfg file: %v", err)
 			}
 
-			directives.Apply(&cfg, pd, md, patchTree, pushTree)
+			errs := directives.Apply(&cfg, pd, md, patchTree, pushTree)
+			if errs != nil {
+				err := json.NewEncoder(os.Stdout).Encode(errs)
+				if err != nil {
+					return err
+				}
+
+				return fmt.Errorf("directives could not be applied")
+			}
 		}
 	}
 
@@ -251,7 +261,7 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		for _, ref := range list {
 			log.Println(pushBranch, ref.Name())
 		}
-		log.Fatal("could not find tip hash")
+		return "", fmt.Errorf("could not find tip hash")
 	}
 
 	return strings.TrimSpace(tipHash), nil
@@ -324,7 +334,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 		} else if strings.HasPrefix(rpm.Ref, "rhel-") {
 			pushBranch = defaultBranch
 		} else {
-			log.Fatal("could not recognize modulemd ref")
+			return fmt.Errorf("could not recognize modulemd ref")
 		}
 
 		tipHash, err = getTipStream(pd, name, pushBranch, md.PushBranch, 0)

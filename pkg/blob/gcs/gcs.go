@@ -23,62 +23,64 @@ package gcs
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"fmt"
 	"io/ioutil"
-	"log"
 )
 
 type GCS struct {
 	bucket *storage.BucketHandle
 }
 
-func New(name string) *GCS {
+func New(name string) (*GCS, error) {
 	ctx := context.Background()
 	client, err := storage.NewClient(ctx)
 	if err != nil {
-		log.Fatalf("could not create gcloud client: %v", err)
+		return nil, fmt.Errorf("could not create gcloud client: %v", err)
 	}
 
 	return &GCS{
 		bucket: client.Bucket(name),
-	}
+	}, nil
 }
 
-func (g *GCS) Write(path string, content []byte) {
+func (g *GCS) Write(path string, content []byte) error {
 	ctx := context.Background()
 	obj := g.bucket.Object(path)
 	w := obj.NewWriter(ctx)
 
 	_, err := w.Write(content)
 	if err != nil {
-		log.Fatalf("could not write file to gcs: %v", err)
+		return fmt.Errorf("could not write file to gcs: %v", err)
 	}
 
 	// Close, just like writing a file.
 	if err := w.Close(); err != nil {
-		log.Fatalf("could not close gcs writer to source: %v", err)
+		return fmt.Errorf("could not close gcs writer to source: %v", err)
 	}
+
+	return nil
 }
 
-func (g *GCS) Read(path string) []byte {
+func (g *GCS) Read(path string) ([]byte, error) {
 	ctx := context.Background()
 	obj := g.bucket.Object(path)
 
 	r, err := obj.NewReader(ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return body
+	return body, nil
 }
 
-func (g *GCS) Exists(path string) bool {
+func (g *GCS) Exists(path string) (bool, error) {
 	ctx := context.Background()
 	obj := g.bucket.Object(path)
 	_, err := obj.NewReader(ctx)
-	return err == nil
+	return err == nil, nil
 }

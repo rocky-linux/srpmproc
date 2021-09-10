@@ -31,8 +31,6 @@ type FsCreatorFunc func(branch string) (billy.Filesystem, error)
 type ProcessData struct {
 	RpmLocation          string
 	UpstreamPrefix       string
-	SshKeyLocation       string
-	SshUser              string
 	Version              int
 	GitCommitterName     string
 	GitCommitterEmail    string

@@ -21,7 +21,7 @@
 package blob
 
 type Storage interface {
-	Write(path string, content []byte)
-	Read(path string) []byte
-	Exists(path string) bool
+	Write(path string, content []byte) error
+	Read(path string) ([]byte, error)
+	Exists(path string) (bool, error)
 }

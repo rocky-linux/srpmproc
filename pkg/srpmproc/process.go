@@ -144,13 +144,17 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	var blobStorage blob.Storage
 
 	if strings.HasPrefix(req.StorageAddr, "gs://") {
-		blobStorage = gcs.New(strings.Replace(req.StorageAddr, "gs://", "", 1))
+		var err error
+		blobStorage, err = gcs.New(strings.Replace(req.StorageAddr, "gs://", "", 1))
+		if err != nil {
+			return nil, err
+		}
 	} else if strings.HasPrefix(req.StorageAddr, "s3://") {
 		blobStorage = s3.New(strings.Replace(req.StorageAddr, "s3://", "", 1))
 	} else if strings.HasPrefix(req.StorageAddr, "file://") {
 		blobStorage = file.New(strings.Replace(req.StorageAddr, "file://", "", 1))
 	} else {
-		log.Fatalf("invalid blob storage")
+		return nil, fmt.Errorf("invalid blob storage")
 	}
 
 	sourceRpmLocation := ""
@@ -165,7 +169,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	if lastKeyLocation == "" {
 		usr, err := user.Current()
 		if err != nil {
-			log.Fatalf("could not get user: %v", err)
+			return nil, fmt.Errorf("could not get user: %v", err)
 		}
 		lastKeyLocation = filepath.Join(usr.HomeDir, ".ssh/id_rsa")
 	}
@@ -183,7 +187,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, "")
 	}
 	if err != nil {
-		log.Fatalf("could not get git authenticator: %v", err)
+		return nil, fmt.Errorf("could not get git authenticator: %v", err)
 	}
 
 	fsCreator := func(branch string) (billy.Filesystem, error) {
@@ -204,7 +208,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 			tmpDir := filepath.Join(req.TmpFsMode, branch)
 			err = fs.MkdirAll(tmpDir, 0755)
 			if err != nil {
-				log.Fatalf("could not create tmpfs dir: %v", err)
+				return nil, fmt.Errorf("could not create tmpfs dir: %v", err)
 			}
 			nFs, err := fs.Chroot(tmpDir)
 			if err != nil {
@@ -226,8 +230,6 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		Importer:             importer,
 		RpmLocation:          sourceRpmLocation,
 		UpstreamPrefix:       req.UpstreamPrefix,
-		SshKeyLocation:       lastKeyLocation,
-		SshUser:              req.SshUser,
 		Version:              req.Version,
 		BlobStorage:          blobStorage,
 		GitCommitterName:     req.GitCommitterName,
@@ -321,7 +323,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		for _, commit := range pd.ManualCommits {
 			branchCommit := strings.Split(commit, ":")
 			if len(branchCommit) != 2 {
-				log.Fatalln("invalid manual commit list")
+				return nil, fmt.Errorf("invalid manual commit list")
 			}
 
 			head := fmt.Sprintf("refs/tags/imports/%s/%s-%s", branchCommit[0], md.Name, branchCommit[1])
@@ -497,8 +499,15 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			if data.StrContains(alreadyUploadedBlobs, checksum) {
 				continue
 			}
-			if !pd.BlobStorage.Exists(checksum) && !pd.NoStorageUpload {
-				pd.BlobStorage.Write(checksum, sourceFileBts)
+			exists, err := pd.BlobStorage.Exists(checksum)
+			if err != nil {
+				return nil, err
+			}
+			if !exists && !pd.NoStorageUpload {
+				err := pd.BlobStorage.Write(checksum, sourceFileBts)
+				if err != nil {
+					return nil, err
+				}
 				log.Printf("wrote %s to blob storage", checksum)
 			}
 			alreadyUploadedBlobs = append(alreadyUploadedBlobs, checksum)

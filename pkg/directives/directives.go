@@ -21,9 +21,6 @@
 package directives
 
 import (
-	"encoding/json"
-	"log"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -41,8 +38,8 @@ func checkAddPrefix(file string) string {
 	return filepath.Join("SOURCES", file)
 }
 
-func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) {
-	var errs []string
+func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) []error {
+	var errs []error
 
 	directives := []func(*srpmprocpb.Cfg, *data.ProcessData, *data.ModeData, *git.Worktree, *git.Worktree) error{
 		replace,
@@ -56,16 +53,13 @@ func Apply(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTr
 	for _, directive := range directives {
 		err := directive(cfg, pd, md, patchTree, pushTree)
 		if err != nil {
-			errs = append(errs, err.Error())
+			errs = append(errs, err)
 		}
 	}
 
 	if len(errs) > 0 {
-		err := json.NewEncoder(os.Stdout).Encode(errs)
-		if err != nil {
-			log.Fatal(errs)
-		}
-
-		os.Exit(1)
+		return errs
 	}
+
+	return nil
 }

@@ -77,7 +77,7 @@ func Fetch(cdnUrl string, dir string) error {
 
 		hasher := data.CompareHash(body, hash)
 		if hasher == nil {
-			log.Fatal("checksum in metadata does not match dist-git file")
+			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}
 
 		err = os.MkdirAll(filepath.Dir(path), 0755)

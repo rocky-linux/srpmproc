@@ -73,13 +73,16 @@ func replace(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchT
 			}
 			break
 		case *srpmprocpb.Replace_WithLookaside:
-			bts := pd.BlobStorage.Read(replacing.WithLookaside)
+			bts, err := pd.BlobStorage.Read(replacing.WithLookaside)
+			if err != nil {
+				return err
+			}
 			hasher := data.CompareHash(bts, replacing.WithLookaside)
 			if hasher == nil {
 				return errors.New("LOOKASIDE_FILE_AND_HASH_NOT_MATCHING")
 			}
 
-			_, err := f.Write(bts)
+			_, err = f.Write(bts)
 			if err != nil {
 				return errors.New(fmt.Sprintf("COULD_NOT_WRITE_LOOKASIDE:%s", filePath))
 			}

@@ -21,8 +21,8 @@
 package file
 
 import (
+	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -37,38 +37,47 @@ func New(path string) *File {
 	}
 }
 
-func (f *File) Write(path string, content []byte) {
+func (f *File) Write(path string, content []byte) error {
 	w, err := os.OpenFile(filepath.Join(f.path, path), os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
 	if err != nil {
-		log.Fatalf("could not open file: %v", err)
+		return fmt.Errorf("could not open file: %v", err)
 	}
 
 	_, err = w.Write(content)
 	if err != nil {
-		log.Fatalf("could not write file to file: %v", err)
+		return fmt.Errorf("could not write file to file: %v", err)
 	}
 
 	// Close, just like writing a file.
 	if err := w.Close(); err != nil {
-		log.Fatalf("could not close file writer to source: %v", err)
+		return fmt.Errorf("could not close file writer to source: %v", err)
 	}
+
+	return nil
 }
 
-func (f *File) Read(path string) []byte {
+func (f *File) Read(path string) ([]byte, error) {
 	r, err := os.OpenFile(filepath.Join(f.path, path), os.O_RDONLY, 0644)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(r)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return body
+	return body, nil
 }
 
-func (f *File) Exists(path string) bool {
+func (f *File) Exists(path string) (bool, error) {
 	_, err := os.Stat(filepath.Join(f.path, path))
-	return !os.IsNotExist(err)
+	if !os.IsNotExist(err) {
+		if !os.IsExist(err) {
+			return false, err
+		}
+		return true, nil
+	}
+
+	return false, nil
 }
