@@ -22,7 +22,7 @@ package data
 
 import (
 	"github.com/go-git/go-billy/v5"
-	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/rocky-linux/srpmproc/pkg/blob"
 )
 
@@ -41,7 +41,7 @@ type ProcessData struct {
 	ImportBranchPrefix   string
 	BranchPrefix         string
 	SingleTag            string
-	Authenticator        *ssh.PublicKeys
+	Authenticator        transport.AuthMethod
 	Importer             ImportMode
 	BlobStorage          blob.Storage
 	NoDupMode            bool

@@ -24,6 +24,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 	"github.com/rocky-linux/srpmproc/pkg/blob"
@@ -70,6 +72,8 @@ type ProcessDataRequest struct {
 	RpmPrefix            string
 	SshKeyLocation       string
 	SshUser              string
+	HttpUsername         string
+	HttpPassword         string
 	ManualCommits        string
 	UpstreamPrefix       string
 	GitCommitterName     string
@@ -166,11 +170,18 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		lastKeyLocation = filepath.Join(usr.HomeDir, ".ssh/id_rsa")
 	}
 
-	var authenticator *ssh.PublicKeys
+	var authenticator transport.AuthMethod
 
 	var err error
-	// create ssh key authenticator
-	authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, "")
+	if req.HttpUsername != "" {
+		authenticator = &http.BasicAuth{
+			Username: req.HttpUsername,
+			Password: req.HttpPassword,
+		}
+	} else {
+		// create ssh key authenticator
+		authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, "")
+	}
 	if err != nil {
 		log.Fatalf("could not get git authenticator: %v", err)
 	}
