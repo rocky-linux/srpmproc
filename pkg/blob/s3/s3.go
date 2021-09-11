@@ -94,6 +94,8 @@ func (s *S3) Read(path string) ([]byte, error) {
 		if !ok || s3err.Code() != s3.ErrCodeNoSuchKey {
 			return nil, err
 		}
+
+		return nil, nil
 	}
 
 	body, err := ioutil.ReadAll(obj.Body)
