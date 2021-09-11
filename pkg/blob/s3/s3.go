@@ -23,6 +23,7 @@ package s3
 import (
 	"bytes"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -89,7 +90,10 @@ func (s *S3) Read(path string) ([]byte, error) {
 		Key:    aws.String(path),
 	})
 	if err != nil {
-		return nil, err
+		s3err, ok := err.(awserr.Error)
+		if !ok || s3err.Code() != s3.ErrCodeNoSuchKey {
+			return nil, err
+		}
 	}
 
 	body, err := ioutil.ReadAll(obj.Body)
