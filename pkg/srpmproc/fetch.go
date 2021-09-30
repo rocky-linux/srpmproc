@@ -80,12 +80,12 @@ func Fetch(cdnUrl string, dir string) error {
 			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}
 
-		err = os.MkdirAll(filepath.Dir(path), 0755)
+		err = os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0755)
 		if err != nil {
 			return fmt.Errorf("could create all directories")
 		}
 
-		f, err := os.Create(path)
+		f, err := os.Create(filepath.Join(dir, path))
 		if err != nil {
 			return fmt.Errorf("could not open file pointer: %v", err)
 		}
