@@ -59,6 +59,9 @@ func (f *File) Write(path string, content []byte) error {
 func (f *File) Read(path string) ([]byte, error) {
 	r, err := os.OpenFile(filepath.Join(f.path, path), os.O_RDONLY, 0644)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
