@@ -99,13 +99,6 @@ func gitlabify(str string) string {
 }
 
 func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
-	switch req.Version {
-	case 8:
-		break
-	default:
-		return nil, fmt.Errorf("unsupported upstream version %d", req.Version)
-	}
-
 	// Set defaults
 	if req.ModulePrefix == "" {
 		req.ModulePrefix = ModulePrefixCentOS
