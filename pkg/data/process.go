@@ -24,6 +24,7 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/rocky-linux/srpmproc/pkg/blob"
+	"log"
 )
 
 type FsCreatorFunc func(branch string) (billy.Filesystem, error)
@@ -52,4 +53,5 @@ type ProcessData struct {
 	AllowStreamBranches  bool
 	FsCreator            FsCreatorFunc
 	CdnUrl               string
+	Log                  *log.Logger
 }

@@ -59,7 +59,7 @@ func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree
 				continue
 			}
 
-			log.Printf("applying directive %s", info.Name())
+			pd.Log.Printf("applying directive %s", info.Name())
 			filePath := filepath.Join("ROCKY/CFG", info.Name())
 			directive, err := patchTree.Filesystem.Open(filePath)
 			if err != nil {
@@ -137,7 +137,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) error {
 	err = repo.Fetch(fetchOptions)
 
 	refName := plumbing.NewBranchReferenceName(md.PushBranch)
-	log.Printf("set reference to ref: %s", refName)
+	pd.Log.Printf("set reference to ref: %s", refName)
 
 	if err != nil {
 		// no patches active
@@ -197,9 +197,9 @@ func getTipStream(pd *data.ProcessData, module string, pushBranch string, origPu
 		Auth: pd.Authenticator,
 	})
 	if err != nil {
-		log.Printf("could not import module: %s", module)
+		pd.Log.Printf("could not import module: %s", module)
 		if tries < 3 {
-			log.Printf("could not get rpm refs. will retry in 3s. %v", err)
+			pd.Log.Printf("could not get rpm refs. will retry in 3s. %v", err)
 			time.Sleep(3 * time.Second)
 			return getTipStream(pd, module, pushBranch, origPushBranch, tries+1)
 		}
@@ -302,7 +302,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 
 	log.Println("This module contains the following rpms:")
 	for name := range module.Data.Components.Rpms {
-		log.Printf("\t- %s", name)
+		pd.Log.Printf("\t- %s", name)
 	}
 
 	defaultBranch := md.PushBranch

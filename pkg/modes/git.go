@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -142,7 +141,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	}
 
 	for _, branch := range latestTags {
-		log.Printf("tag: %s", strings.TrimPrefix(branch.remote, "refs/tags/"))
+		pd.Log.Printf("tag: %s", strings.TrimPrefix(branch.remote, "refs/tags/"))
 		branches = append(branches, *branch)
 	}
 
@@ -179,7 +178,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		branchName = match[2]
 		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
 	}
-	log.Printf("checking out upstream refspec %s", refspec)
+	pd.Log.Printf("checking out upstream refspec %s", refspec)
 	err = remote.Fetch(&git.FetchOptions{
 		RemoteName: "upstream",
 		RefSpecs:   []config.RefSpec{refspec},
@@ -205,7 +204,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 	metadataFile, err := md.Worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.Name))
 	if err != nil {
-		log.Printf("warn: could not open metadata file, so skipping: %v", err)
+		pd.Log.Printf("warn: could not open metadata file, so skipping: %v", err)
 		return nil
 	}
 
@@ -233,7 +232,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 		if md.BlobCache[hash] != nil {
 			body = md.BlobCache[hash]
-			log.Printf("retrieving %s from cache", hash)
+			pd.Log.Printf("retrieving %s from cache", hash)
 		} else {
 			fromBlobStorage, err := pd.BlobStorage.Read(hash)
 			if err != nil {
@@ -241,10 +240,10 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 			}
 			if fromBlobStorage != nil && !pd.NoStorageDownload {
 				body = fromBlobStorage
-				log.Printf("downloading %s from blob storage", hash)
+				pd.Log.Printf("downloading %s from blob storage", hash)
 			} else {
 				url := fmt.Sprintf("%s/%s/%s/%s", pd.CdnUrl, md.Name, branchName, hash)
-				log.Printf("downloading %s", url)
+				pd.Log.Printf("downloading %s", url)
 
 				req, err := http.NewRequest("GET", url, nil)
 				if err != nil {
@@ -275,7 +274,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 			return fmt.Errorf("could not open file pointer: %v", err)
 		}
 
-		hasher := data.CompareHash(body, hash)
+		hasher := pd.CompareHash(body, hash)
 		if hasher == nil {
 			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}

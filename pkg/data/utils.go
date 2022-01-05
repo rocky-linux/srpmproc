@@ -30,7 +30,6 @@ import (
 	"github.com/go-git/go-billy/v5"
 	"hash"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -93,9 +92,9 @@ func StrContains(a []string, b string) bool {
 	return false
 }
 
-// check if content and checksum matches
+// CompareHash checks if content and checksum matches
 // returns the hash type if success else nil
-func CompareHash(content []byte, checksum string) hash.Hash {
+func (pd *ProcessData) CompareHash(content []byte, checksum string) hash.Hash {
 	var hashType hash.Hash
 
 	switch len(checksum) {
@@ -123,7 +122,7 @@ func CompareHash(content []byte, checksum string) hash.Hash {
 
 	calculated := hex.EncodeToString(hashType.Sum(nil))
 	if calculated != checksum {
-		log.Printf("wanted checksum %s, but got %s", checksum, calculated)
+		pd.Log.Printf("wanted checksum %s, but got %s", checksum, calculated)
 		return nil
 	}
 

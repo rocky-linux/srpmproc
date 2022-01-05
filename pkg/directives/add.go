@@ -68,7 +68,7 @@ func add(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, patchTree
 				return err
 			}
 
-			hashFunction := data.CompareHash(replacingBytes, addType.Lookaside)
+			hashFunction := pd.CompareHash(replacingBytes, addType.Lookaside)
 			if hashFunction == nil {
 				return errors.New(fmt.Sprintf("LOOKASIDE_HASH_DOES_NOT_MATCH:%s", addType.Lookaside))
 			}

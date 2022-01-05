@@ -77,7 +77,7 @@ func replace(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchT
 			if err != nil {
 				return err
 			}
-			hasher := data.CompareHash(bts, replacing.WithLookaside)
+			hasher := pd.CompareHash(bts, replacing.WithLookaside)
 			if hasher == nil {
 				return errors.New("LOOKASIDE_FILE_AND_HASH_NOT_MATCHING")
 			}

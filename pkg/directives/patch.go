@@ -24,15 +24,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
-
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/go-git/go-git/v5"
 	srpmprocpb "github.com/rocky-linux/srpmproc/pb"
 	"github.com/rocky-linux/srpmproc/pkg/data"
 )
 
-func patch(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
+func patch(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, patch := range cfg.Patch {
 		patchFile, err := patchTree.Filesystem.Open(patch.File)
 		if err != nil {
@@ -40,7 +38,7 @@ func patch(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree
 		}
 		files, _, err := gitdiff.Parse(patchFile)
 		if err != nil {
-			log.Printf("could not parse patch file: %v", err)
+			pd.Log.Printf("could not parse patch file: %v", err)
 			return errors.New(fmt.Sprintf("COULD_NOT_PARSE_PATCH_FILE:%s", patch.File))
 		}
 
@@ -58,7 +56,7 @@ func patch(cfg *srpmprocpb.Cfg, _ *data.ProcessData, _ *data.ModeData, patchTree
 
 				err = gitdiff.NewApplier(patchSubjectFile).ApplyFile(&output, patchedFile)
 				if err != nil {
-					log.Printf("could not apply patch: %v", err)
+					pd.Log.Printf("could not apply patch: %v", err)
 					return errors.New(fmt.Sprintf("COULD_NOT_APPLY_PATCH_WITH_SUBJECT:%s", srcPath))
 				}
 			}

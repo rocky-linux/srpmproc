@@ -45,7 +45,7 @@ func runFetch(_ *cobra.Command, _ []string) {
 		log.Fatalf("could not get working directory: %v", err)
 	}
 
-	err = srpmproc.Fetch(cdnUrl, wd)
+	err = srpmproc.Fetch(os.Stdout, cdnUrl, wd)
 	if err != nil {
 		log.Fatal(err)
 	}

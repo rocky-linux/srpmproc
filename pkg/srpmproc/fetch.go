@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rocky-linux/srpmproc/pkg/data"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,7 +13,11 @@ import (
 	"strings"
 )
 
-func Fetch(cdnUrl string, dir string) error {
+func Fetch(logger io.Writer, cdnUrl string, dir string) error {
+	pd := &data.ProcessData{
+		Log: log.New(logger, "", log.LstdFlags),
+	}
+
 	metadataPath := ""
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if strings.HasSuffix(path, ".metadata") {
@@ -53,7 +58,7 @@ func Fetch(cdnUrl string, dir string) error {
 		path := lineInfo[1]
 
 		url := fmt.Sprintf("%s/%s", cdnUrl, hash)
-		log.Printf("downloading %s", url)
+		pd.Log.Printf("downloading %s", url)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
@@ -75,7 +80,7 @@ func Fetch(cdnUrl string, dir string) error {
 			return fmt.Errorf("could not close body handle: %v", err)
 		}
 
-		hasher := data.CompareHash(body, hash)
+		hasher := pd.CompareHash(body, hash)
 		if hasher == nil {
 			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}

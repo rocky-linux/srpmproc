@@ -35,8 +35,10 @@ import (
 	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"github.com/rocky-linux/srpmproc/pkg/modes"
 	"github.com/rocky-linux/srpmproc/pkg/rpmutils"
+	"io"
 	"io/ioutil"
 	"log"
+	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -88,6 +90,7 @@ type ProcessDataRequest struct {
 	NoStorageDownload    bool
 	SingleTag            string
 	CdnUrl               string
+	LogWriter            io.Writer
 }
 
 func gitlabify(str string) string {
@@ -191,8 +194,14 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		reqFsCreator = req.FsCreator
 	}
 
+	var writer io.Writer = os.Stdout
+	if req.LogWriter != nil {
+		writer = req.LogWriter
+	}
+	logger := log.New(writer, "", log.LstdFlags)
+
 	if req.TmpFsMode != "" {
-		log.Printf("using tmpfs dir: %s", req.TmpFsMode)
+		logger.Printf("using tmpfs dir: %s", req.TmpFsMode)
 		fsCreator = func(branch string) (billy.Filesystem, error) {
 			fs, err := reqFsCreator(branch)
 			if err != nil {
@@ -242,6 +251,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		AllowStreamBranches:  req.AllowStreamBranches,
 		FsCreator:            fsCreator,
 		CdnUrl:               req.CdnUrl,
+		Log:                  logger,
 	}, nil
 }
 
@@ -344,7 +354,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 				if strings.HasPrefix(md.TagBranch, prefix) {
 					replace := strings.Replace(md.TagBranch, "refs/heads/", "", 1)
 					matchString = fmt.Sprintf("refs/tags/imports/%s/%s", replace, filepath.Base(pd.RpmLocation))
-					log.Printf("using match string: %s", matchString)
+					pd.Log.Printf("using match string: %s", matchString)
 				}
 			}
 			if !misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(matchString) {
@@ -377,7 +387,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		shouldContinue := true
 		for _, ignoredTag := range tagIgnoreList {
 			if ignoredTag == "refs/tags/"+newTag {
-				log.Printf("skipping %s", ignoredTag)
+				pd.Log.Printf("skipping %s", ignoredTag)
 				shouldContinue = false
 			}
 		}
@@ -387,9 +397,9 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 		// create a new remote
 		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
-		log.Printf("using remote: %s", remoteUrl)
+		pd.Log.Printf("using remote: %s", remoteUrl)
 		refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.PushBranch, md.PushBranch))
-		log.Printf("using refspec: %s", refspec)
+		pd.Log.Printf("using refspec: %s", refspec)
 
 		_, err = repo.CreateRemote(&config.RemoteConfig{
 			Name:  "origin",
@@ -407,7 +417,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		})
 
 		refName := plumbing.NewBranchReferenceName(md.PushBranch)
-		log.Printf("set reference to ref: %s", refName)
+		pd.Log.Printf("set reference to ref: %s", refName)
 
 		var hash plumbing.Hash
 		if commitPin[md.PushBranch] != "" {
@@ -501,7 +511,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 				if err != nil {
 					return nil, err
 				}
-				log.Printf("wrote %s to blob storage", checksum)
+				pd.Log.Printf("wrote %s to blob storage", checksum)
 			}
 			alreadyUploadedBlobs = append(alreadyUploadedBlobs, checksum)
 		}
@@ -541,7 +551,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 		// show status
 		status, _ := w.Status()
-		log.Printf("successfully processed:\n%s", status)
+		pd.Log.Printf("successfully processed:\n%s", status)
 
 		statusLines := strings.Split(status.String(), "\n")
 		for _, line := range statusLines {
@@ -563,7 +573,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			hashes = nil
 			pushRefspecs = append(pushRefspecs, "*:*")
 		} else {
-			log.Printf("tip %s", head.String())
+			pd.Log.Printf("tip %s", head.String())
 			hashes = append(hashes, head.Hash())
 			refOrigin := "refs/heads/" + md.PushBranch
 			pushRefspecs = append(pushRefspecs, config.RefSpec(fmt.Sprintf("HEAD:%s", refOrigin)))
@@ -588,7 +598,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			return nil, fmt.Errorf("could not get commit object: %v", err)
 		}
 
-		log.Printf("committed:\n%s", obj.String())
+		pd.Log.Printf("committed:\n%s", obj.String())
 
 		_, err = repo.CreateTag(newTag, commit, &git.CreateTagOptions{
 			Tagger: &object.Signature{
