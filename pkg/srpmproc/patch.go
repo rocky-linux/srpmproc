@@ -128,6 +128,7 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) error {
 	}
 
 	fetchOptions := &git.FetchOptions{
+		Auth:       pd.Authenticator,
 		RemoteName: "origin",
 		RefSpecs:   []config.RefSpec{refspec},
 	}

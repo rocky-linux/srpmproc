@@ -82,6 +82,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	}
 
 	err = remote.Fetch(&git.FetchOptions{
+		Auth:     pd.Authenticator,
 		RefSpecs: []config.RefSpec{refspec},
 		Tags:     git.AllTags,
 		Force:    true,
@@ -120,7 +121,9 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	}
 	_ = tagIter.ForEach(tagAdd)
 
-	list, err := remote.List(&git.ListOptions{})
+	list, err := remote.List(&git.ListOptions{
+		Auth: pd.Authenticator,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("could not list upstream: %v", err)
 	}
@@ -180,6 +183,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 	}
 	pd.Log.Printf("checking out upstream refspec %s", refspec)
 	err = remote.Fetch(&git.FetchOptions{
+		Auth:       pd.Authenticator,
 		RemoteName: "upstream",
 		RefSpecs:   []config.RefSpec{refspec},
 		Tags:       git.AllTags,
