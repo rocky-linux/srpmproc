@@ -22,6 +22,7 @@ package modes
 
 import (
 	"fmt"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
 	"net/http"
@@ -81,14 +82,24 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 		return nil, fmt.Errorf("could not create remote: %v", err)
 	}
 
-	err = remote.Fetch(&git.FetchOptions{
+	fetchOpts := &git.FetchOptions{
 		Auth:     pd.Authenticator,
 		RefSpecs: []config.RefSpec{refspec},
 		Tags:     git.AllTags,
 		Force:    true,
-	})
+	}
+
+	err = remote.Fetch(fetchOpts)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch upstream: %v", err)
+		if err == transport.ErrInvalidAuthMethod {
+			fetchOpts.Auth = nil
+			err = remote.Fetch(fetchOpts)
+			if err != nil {
+				return nil, fmt.Errorf("could not fetch upstream: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("could not fetch upstream: %v", err)
+		}
 	}
 
 	var branches remoteTargetSlice
@@ -121,11 +132,20 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	}
 	_ = tagIter.ForEach(tagAdd)
 
-	list, err := remote.List(&git.ListOptions{
+	listOpts := &git.ListOptions{
 		Auth: pd.Authenticator,
-	})
+	}
+	list, err := remote.List(listOpts)
 	if err != nil {
-		return nil, fmt.Errorf("could not list upstream: %v", err)
+		if err == transport.ErrInvalidAuthMethod {
+			listOpts.Auth = nil
+			list, err = remote.List(listOpts)
+			if err != nil {
+				return nil, fmt.Errorf("could not list upstream: %v", err)
+			}
+		} else {
+			return nil, fmt.Errorf("could not list upstream: %v", err)
+		}
 	}
 
 	for _, ref := range list {
@@ -182,15 +202,24 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
 	}
 	pd.Log.Printf("checking out upstream refspec %s", refspec)
-	err = remote.Fetch(&git.FetchOptions{
+	fetchOpts := &git.FetchOptions{
 		Auth:       pd.Authenticator,
 		RemoteName: "upstream",
 		RefSpecs:   []config.RefSpec{refspec},
 		Tags:       git.AllTags,
 		Force:      true,
-	})
+	}
+	err = remote.Fetch(fetchOpts)
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		return fmt.Errorf("could not fetch upstream: %v", err)
+		if err == transport.ErrInvalidAuthMethod {
+			fetchOpts.Auth = nil
+			err = remote.Fetch(fetchOpts)
+			if err != nil && err != git.NoErrAlreadyUpToDate {
+				return fmt.Errorf("could not fetch upstream: %v", err)
+			}
+		} else {
+			return fmt.Errorf("could not fetch upstream: %v", err)
+		}
 	}
 
 	err = md.Worktree.Checkout(&git.CheckoutOptions{
@@ -258,6 +287,21 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 				resp, err := client.Do(req)
 				if err != nil {
 					return fmt.Errorf("could not download dist-git file: %v", err)
+				}
+				if resp.StatusCode != http.StatusOK {
+					url = fmt.Sprintf("%s/%s", pd.CdnUrl, hash)
+					req, err = http.NewRequest("GET", url, nil)
+					if err != nil {
+						return fmt.Errorf("could not create new http request: %v", err)
+					}
+					req.Header.Set("Accept-Encoding", "*")
+					resp, err = client.Do(req)
+					if err != nil {
+						return fmt.Errorf("could not download dist-git file: %v", err)
+					}
+					if resp.StatusCode != http.StatusOK {
+						return fmt.Errorf("could not download dist-git file (status code %d): %v", resp.StatusCode, err)
+					}
 				}
 
 				body, err = ioutil.ReadAll(resp.Body)
