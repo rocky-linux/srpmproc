@@ -91,7 +91,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 
 	err = remote.Fetch(fetchOpts)
 	if err != nil {
-		if err == transport.ErrInvalidAuthMethod {
+		if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
 			fetchOpts.Auth = nil
 			err = remote.Fetch(fetchOpts)
 			if err != nil {
@@ -137,7 +137,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	}
 	list, err := remote.List(listOpts)
 	if err != nil {
-		if err == transport.ErrInvalidAuthMethod {
+		if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
 			listOpts.Auth = nil
 			list, err = remote.List(listOpts)
 			if err != nil {
@@ -211,7 +211,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 	}
 	err = remote.Fetch(fetchOpts)
 	if err != nil && err != git.NoErrAlreadyUpToDate {
-		if err == transport.ErrInvalidAuthMethod {
+		if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
 			fetchOpts.Auth = nil
 			err = remote.Fetch(fetchOpts)
 			if err != nil && err != git.NoErrAlreadyUpToDate {

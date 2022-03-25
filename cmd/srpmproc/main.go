@@ -51,6 +51,8 @@ var (
 	manualCommits        string
 	moduleFallbackStream string
 	allowStreamBranches  bool
+	basicUsername        string
+	basicPassword        string
 )
 
 var root = &cobra.Command{
@@ -82,6 +84,8 @@ func mn(_ *cobra.Command, _ []string) {
 		NoStorageDownload:    noStorageDownload,
 		SingleTag:            singleTag,
 		CdnUrl:               cdnUrl,
+		HttpUsername:         basicUsername,
+		HttpPassword:         basicPassword,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -127,6 +131,8 @@ func main() {
 	root.Flags().StringVar(&manualCommits, "manual-commits", "", "Comma separated branch and commit list for packages with broken release tags (Format: BRANCH:HASH)")
 	root.Flags().StringVar(&moduleFallbackStream, "module-fallback-stream", "", "Override fallback stream. Some module packages are published as collections and mostly use the same stream name, some of them deviate from the main stream")
 	root.Flags().BoolVar(&allowStreamBranches, "allow-stream-branches", false, "Allow import from stream branches")
+	root.Flags().StringVar(&basicUsername, "basic-username", "", "Basic auth username")
+	root.Flags().StringVar(&basicPassword, "basic-password", "", "Basic auth password")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
