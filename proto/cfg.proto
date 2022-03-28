@@ -134,6 +134,7 @@ message SpecChange {
   repeated SearchAndReplaceOperation search_and_replace = 3;
   repeated AppendOperation append = 4;
   repeated NewFieldOperation new_field = 5;
+  bool disable_auto_align = 6;
 }
 
 message Patch {

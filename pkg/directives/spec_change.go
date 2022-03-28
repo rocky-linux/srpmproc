@@ -105,7 +105,7 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 			case *srpmprocpb.SpecChange_FileOperation_Add:
 				fieldNum := *req.lastNum + 1
 				field := fmt.Sprintf("%s%d", req.expectedField, fieldNum)
-				spaces := calculateSpaces(req.longestField, len(field))
+				spaces := calculateSpaces(req.longestField, len(field), req.cfg.SpecChange.DisableAutoAlign)
 				*req.newLines = append(*req.newLines, fmt.Sprintf("%s:%s%s", field, spaces, file.Name))
 
 				if req.expectedField == "Patch" && file.AddToPrep {
@@ -132,7 +132,10 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 	return false, nil
 }
 
-func calculateSpaces(longestField int, fieldLength int) string {
+func calculateSpaces(longestField int, fieldLength int, disableAutoAlign bool) string {
+	if disableAutoAlign {
+		return ""
+	}
 	return strings.Repeat(" ", longestField+8-fieldLength)
 }
 
@@ -284,7 +287,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 	for field, nfm := range newFieldMemory {
 		for value, lineNum := range nfm {
 			if lineNum != 0 {
-				newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field)), value)
+				newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field), cfg.SpecChange.DisableAutoAlign), value)
 				setFASlice(futureAdditions, lineNum+1, newLine)
 			}
 		}
@@ -339,7 +342,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				}
 			}
 
-			spaces := calculateSpaces(longestField, len(field))
+			spaces := calculateSpaces(longestField, len(field), cfg.SpecChange.DisableAutoAlign)
 
 			err := sourcePatchOperationInLoop(&sourcePatchOperationInLoopRequest{
 				cfg:           cfg,
@@ -410,7 +413,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 				var innerNewLines []string
 				for field, nfm := range newFieldMemory {
 					for value, ln := range nfm {
-						newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field)), value)
+						newLine := fmt.Sprintf("%s:%s%s", field, calculateSpaces(longestField, len(field), cfg.SpecChange.DisableAutoAlign), value)
 						if ln == 0 {
 							if isNextLineSection(lineNum, lines) {
 								innerNewLines = append(innerNewLines, newLine)
