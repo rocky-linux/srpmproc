@@ -134,7 +134,7 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 
 func calculateSpaces(longestField int, fieldLength int, disableAutoAlign bool) string {
 	if disableAutoAlign {
-		return ""
+		return " "
 	}
 	return strings.Repeat(" ", longestField+8-fieldLength)
 }
