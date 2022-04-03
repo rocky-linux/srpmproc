@@ -3,6 +3,7 @@ package srpmproc
 import (
 	"errors"
 	"fmt"
+	"github.com/rocky-linux/srpmproc/pkg/blob"
 	"github.com/rocky-linux/srpmproc/pkg/data"
 	"io"
 	"io/ioutil"
@@ -13,7 +14,7 @@ import (
 	"strings"
 )
 
-func Fetch(logger io.Writer, cdnUrl string, dir string) error {
+func Fetch(logger io.Writer, cdnUrl string, dir string, storage blob.Storage) error {
 	pd := &data.ProcessData{
 		Log: log.New(logger, "", log.LstdFlags),
 	}
@@ -58,26 +59,38 @@ func Fetch(logger io.Writer, cdnUrl string, dir string) error {
 		path := lineInfo[1]
 
 		url := fmt.Sprintf("%s/%s", cdnUrl, hash)
+		if storage != nil {
+			url = hash
+		}
 		pd.Log.Printf("downloading %s", url)
 
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return fmt.Errorf("could not create new http request: %v", err)
-		}
-		req.Header.Set("Accept-Encoding", "*")
+		var body []byte
 
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("could not download dist-git file: %v", err)
-		}
+		if storage != nil {
+			body, err = storage.Read(hash)
+			if err != nil {
+				return fmt.Errorf("could not read blob: %v", err)
+			}
+		} else {
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return fmt.Errorf("could not create new http request: %v", err)
+			}
+			req.Header.Set("Accept-Encoding", "*")
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("could not read the whole dist-git file: %v", err)
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			return fmt.Errorf("could not close body handle: %v", err)
+			resp, err := client.Do(req)
+			if err != nil {
+				return fmt.Errorf("could not download dist-git file: %v", err)
+			}
+
+			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("could not read the whole dist-git file: %v", err)
+			}
+			err = resp.Body.Close()
+			if err != nil {
+				return fmt.Errorf("could not close body handle: %v", err)
+			}
 		}
 
 		hasher := pd.CompareHash(body, hash)

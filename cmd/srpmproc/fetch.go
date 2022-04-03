@@ -37,6 +37,8 @@ var cdnUrl string
 func init() {
 	fetch.Flags().StringVar(&cdnUrl, "cdn-url", "", "Path to CDN")
 	_ = fetch.MarkFlagRequired("cdn-url")
+
+	root.AddCommand(fetch)
 }
 
 func runFetch(_ *cobra.Command, _ []string) {
@@ -45,12 +47,8 @@ func runFetch(_ *cobra.Command, _ []string) {
 		log.Fatalf("could not get working directory: %v", err)
 	}
 
-	err = srpmproc.Fetch(os.Stdout, cdnUrl, wd)
+	err = srpmproc.Fetch(os.Stdout, cdnUrl, wd, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func init() {
-	root.AddCommand(fetch)
 }
