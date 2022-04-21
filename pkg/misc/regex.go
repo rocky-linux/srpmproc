@@ -8,7 +8,7 @@ import (
 
 func GetTagImportRegex(pd *data.ProcessData) *regexp.Regexp {
 	branchRegex := fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)
-	if pd.StrictBranchMode {
+	if !pd.StrictBranchMode {
 		branchRegex += ".+"
 	}
 	regex := fmt.Sprintf("refs/tags/(imports/(%s)/(.*))", branchRegex)
