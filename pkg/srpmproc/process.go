@@ -189,7 +189,10 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	}
 
 	fsCreator := func(branch string) (billy.Filesystem, error) {
-		return osfs.New("."), nil
+		if req.TmpFsMode != "" {
+			return osfs.New("."), nil
+		}
+		return memfs.New(), nil
 	}
 	reqFsCreator := fsCreator
 	if req.FsCreator != nil {
