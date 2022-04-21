@@ -2,13 +2,16 @@ package misc
 
 import (
 	"fmt"
+	"github.com/rocky-linux/srpmproc/pkg/data"
 	"regexp"
 )
 
-func GetTagImportRegex(importBranchPrefix string, allowStreamBranches bool) *regexp.Regexp {
-	if allowStreamBranches {
-		return regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s(?:.s|.)|%s(?:|s).+)/(.*))", importBranchPrefix, importBranchPrefix))
-	} else {
-		return regexp.MustCompile(fmt.Sprintf("refs/tags/(imports/(%s.|%s.-.+)/(.*))", importBranchPrefix, importBranchPrefix))
+func GetTagImportRegex(pd *data.ProcessData) *regexp.Regexp {
+	branchRegex := fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)
+	if pd.StrictBranchMode {
+		branchRegex += ".+"
 	}
+	regex := fmt.Sprintf("refs/tags/(imports/(%s)/(.*))", branchRegex)
+
+	return regexp.MustCompile(regex)
 }

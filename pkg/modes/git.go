@@ -109,8 +109,8 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	tagAdd := func(tag *object.Tag) error {
 		if strings.HasPrefix(tag.Name, fmt.Sprintf("imports/%s%d", pd.ImportBranchPrefix, pd.Version)) {
 			refSpec := fmt.Sprintf("refs/tags/%s", tag.Name)
-			if misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(refSpec) {
-				match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(refSpec)
+			if misc.GetTagImportRegex(pd).MatchString(refSpec) {
+				match := misc.GetTagImportRegex(pd).FindStringSubmatch(refSpec)
 
 				exists := latestTags[match[2]]
 				if exists != nil && exists.when.After(tag.Tagger.When) {
@@ -197,7 +197,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
 		branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
 	} else {
-		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(md.TagBranch)
+		match := misc.GetTagImportRegex(pd).FindStringSubmatch(md.TagBranch)
 		branchName = match[2]
 		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
 	}
@@ -362,8 +362,8 @@ func (g *GitMode) PostProcess(md *data.ModeData) error {
 }
 
 func (g *GitMode) ImportName(pd *data.ProcessData, md *data.ModeData) string {
-	if misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(md.TagBranch) {
-		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(md.TagBranch)
+	if misc.GetTagImportRegex(pd).MatchString(md.TagBranch) {
+		match := misc.GetTagImportRegex(pd).FindStringSubmatch(md.TagBranch)
 		return match[3]
 	}
 

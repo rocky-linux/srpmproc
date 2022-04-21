@@ -50,7 +50,8 @@ var (
 	noStorageUpload      bool
 	manualCommits        string
 	moduleFallbackStream string
-	allowStreamBranches  bool
+	branchSuffix         string
+	strictBranchMode     bool
 	basicUsername        string
 	basicPassword        string
 )
@@ -78,7 +79,8 @@ func mn(_ *cobra.Command, _ []string) {
 		ImportBranchPrefix:   importBranchPrefix,
 		BranchPrefix:         branchPrefix,
 		NoDupMode:            noDupMode,
-		AllowStreamBranches:  allowStreamBranches,
+		BranchSuffix:         branchSuffix,
+		StrictBranchMode:     strictBranchMode,
 		ModuleFallbackStream: moduleFallbackStream,
 		NoStorageUpload:      noStorageUpload,
 		NoStorageDownload:    noStorageDownload,
@@ -130,7 +132,8 @@ func main() {
 	root.Flags().BoolVar(&noStorageUpload, "no-storage-upload", false, "If enabled, blobs are not uploaded to blob storage")
 	root.Flags().StringVar(&manualCommits, "manual-commits", "", "Comma separated branch and commit list for packages with broken release tags (Format: BRANCH:HASH)")
 	root.Flags().StringVar(&moduleFallbackStream, "module-fallback-stream", "", "Override fallback stream. Some module packages are published as collections and mostly use the same stream name, some of them deviate from the main stream")
-	root.Flags().BoolVar(&allowStreamBranches, "allow-stream-branches", false, "Allow import from stream branches")
+	root.Flags().StringVar(&branchSuffix, "branch-suffix", "", "Branch suffix to use for imported branches")
+	root.Flags().BoolVar(&strictBranchMode, "strict-branch-mode", false, "If enabled, only branches with the calculated name are imported and not prefix only")
 	root.Flags().StringVar(&basicUsername, "basic-username", "", "Basic auth username")
 	root.Flags().StringVar(&basicPassword, "basic-password", "", "Basic auth password")
 

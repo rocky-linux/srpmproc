@@ -50,7 +50,8 @@ type ProcessData struct {
 	NoStorageUpload      bool
 	ManualCommits        []string
 	ModuleFallbackStream string
-	AllowStreamBranches  bool
+	BranchSuffix         string
+	StrictBranchMode     bool
 	FsCreator            FsCreatorFunc
 	CdnUrl               string
 	Log                  *log.Logger

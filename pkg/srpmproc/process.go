@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -84,7 +85,8 @@ type ProcessDataRequest struct {
 	BranchPrefix         string
 	FsCreator            data.FsCreatorFunc
 	NoDupMode            bool
-	AllowStreamBranches  bool
+	BranchSuffix         string
+	StrictBranchMode     bool
 	ModuleFallbackStream string
 	NoStorageUpload      bool
 	NoStorageDownload    bool
@@ -187,7 +189,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	}
 
 	fsCreator := func(branch string) (billy.Filesystem, error) {
-		return memfs.New(), nil
+		return osfs.New("."), nil
 	}
 	reqFsCreator := fsCreator
 	if req.FsCreator != nil {
@@ -248,7 +250,8 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		NoStorageUpload:      req.NoStorageUpload,
 		ManualCommits:        manualCs,
 		ModuleFallbackStream: req.ModuleFallbackStream,
-		AllowStreamBranches:  req.AllowStreamBranches,
+		BranchSuffix:         req.BranchSuffix,
+		StrictBranchMode:     req.StrictBranchMode,
 		FsCreator:            fsCreator,
 		CdnUrl:               req.CdnUrl,
 		Log:                  logger,
@@ -343,12 +346,8 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			source.Expired = true
 		}
 
-		if strings.Contains(md.TagBranch, "-beta") {
-			continue
-		}
-
 		var matchString string
-		if !misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(md.TagBranch) {
+		if !misc.GetTagImportRegex(pd).MatchString(md.TagBranch) {
 			if pd.ModuleMode {
 				prefix := fmt.Sprintf("refs/heads/%s%d", pd.ImportBranchPrefix, pd.Version)
 				if strings.HasPrefix(md.TagBranch, prefix) {
@@ -357,14 +356,14 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 					pd.Log.Printf("using match string: %s", matchString)
 				}
 			}
-			if !misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).MatchString(matchString) {
+			if !misc.GetTagImportRegex(pd).MatchString(matchString) {
 				continue
 			}
 		} else {
 			matchString = md.TagBranch
 		}
 
-		match := misc.GetTagImportRegex(pd.ImportBranchPrefix, pd.AllowStreamBranches).FindStringSubmatch(matchString)
+		match := misc.GetTagImportRegex(pd).FindStringSubmatch(matchString)
 		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 		newTag = strings.Replace(newTag, "%", "_", -1)
