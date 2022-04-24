@@ -12,8 +12,11 @@ Available Commands:
   help        Help about any command
 
 Flags:
-      --allow-stream-branches           Allow import from stream branches
+      --basic-password string           Basic auth password
+      --basic-username string           Basic auth username
       --branch-prefix string            Branch prefix (replaces import-branch-prefix) (default "r")
+      --branch-suffix string            Branch suffix to use for imported branches
+      --cdn-url string                  CDN URL to download blobs from (default "https://git.centos.org/sources")
       --git-committer-email string      Email of committer (default "rockyautomation@rockylinux.org")
       --git-committer-name string       Name of committer (default "rockyautomation")
   -h, --help                            help for srpmproc
@@ -31,9 +34,9 @@ Flags:
       --ssh-key-location string         Location of the SSH key to use to authenticate against upstream
       --ssh-user string                 SSH User (default "git")
       --storage-addr string             Bucket to use as blob storage
+      --strict-branch-mode              If enabled, only branches with the calculated name are imported and not prefix only
       --tmpfs-mode string               If set, packages are imported to path and patched but not pushed
       --upstream-prefix string          Upstream git repository prefix
-      --upstream-prefix-https string    Web version of upstream prefix. Required if module-mode
       --version int                     Upstream version
 
 Use "srpmproc [command] --help" for more information about a command.

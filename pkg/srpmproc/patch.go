@@ -23,6 +23,7 @@ package srpmproc
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/rocky-linux/srpmproc/pkg/misc"
 	"io/ioutil"
 	"log"
@@ -141,37 +142,47 @@ func executePatchesRpm(pd *data.ProcessData, md *data.ModeData) error {
 	pd.Log.Printf("set reference to ref: %s", refName)
 
 	if err != nil {
-		// no patches active
-		log.Println("info: patch repo not found")
-		return nil
-	} else {
-		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewRemoteReferenceName("origin", "main"),
-			Force:  true,
-		})
-		// common patches found, apply them
-		if err == nil {
-			err := applyPatches(pd, md, w, md.Worktree)
+		if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
+			fetchOptions.Auth = nil
+			err = repo.Fetch(fetchOptions)
 			if err != nil {
-				return err
+				// no patches active
+				log.Println("info: patch repo not found")
+				return nil
 			}
 		} else {
-			log.Println("info: no common patches found")
+			// no patches active
+			log.Println("info: patch repo not found")
+			return nil
 		}
+	}
 
-		err = w.Checkout(&git.CheckoutOptions{
-			Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
-			Force:  true,
-		})
-		// branch specific patches found, apply them
-		if err == nil {
-			err := applyPatches(pd, md, w, md.Worktree)
-			if err != nil {
-				return err
-			}
-		} else {
-			log.Println("info: no branch specific patches found")
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.NewRemoteReferenceName("origin", "main"),
+		Force:  true,
+	})
+	// common patches found, apply them
+	if err == nil {
+		err := applyPatches(pd, md, w, md.Worktree)
+		if err != nil {
+			return err
 		}
+	} else {
+		log.Println("info: no common patches found")
+	}
+
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
+		Force:  true,
+	})
+	// branch specific patches found, apply them
+	if err == nil {
+		err := applyPatches(pd, md, w, md.Worktree)
+		if err != nil {
+			return err
+		}
+	} else {
+		log.Println("info: no branch specific patches found")
 	}
 
 	return nil
