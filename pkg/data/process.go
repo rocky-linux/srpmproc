@@ -55,4 +55,6 @@ type ProcessData struct {
 	FsCreator            FsCreatorFunc
 	CdnUrl               string
 	Log                  *log.Logger
+	PackageVersion       string
+	PackageRelease       string
 }

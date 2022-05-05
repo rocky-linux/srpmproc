@@ -54,6 +54,8 @@ var (
 	strictBranchMode     bool
 	basicUsername        string
 	basicPassword        string
+	packageVersion       string
+	packageRelease       string
 )
 
 var root = &cobra.Command{
@@ -88,6 +90,8 @@ func mn(_ *cobra.Command, _ []string) {
 		CdnUrl:               cdnUrl,
 		HttpUsername:         basicUsername,
 		HttpPassword:         basicPassword,
+		PackageVersion:       packageVersion,
+		PackageRelease:       packageRelease,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -136,6 +140,8 @@ func main() {
 	root.Flags().BoolVar(&strictBranchMode, "strict-branch-mode", false, "If enabled, only branches with the calculated name are imported and not prefix only")
 	root.Flags().StringVar(&basicUsername, "basic-username", "", "Basic auth username")
 	root.Flags().StringVar(&basicPassword, "basic-password", "", "Basic auth password")
+	root.Flags().StringVar(&packageVersion, "package-version", "", "Package version to fetch")
+	root.Flags().StringVar(&packageRelease, "package-release", "", "Package release to fetch")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)

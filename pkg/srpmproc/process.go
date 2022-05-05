@@ -93,6 +93,9 @@ type ProcessDataRequest struct {
 	SingleTag            string
 	CdnUrl               string
 	LogWriter            io.Writer
+
+	PackageVersion string
+	PackageRelease string
 }
 
 func gitlabify(str string) string {
@@ -258,6 +261,8 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		FsCreator:            fsCreator,
 		CdnUrl:               req.CdnUrl,
 		Log:                  logger,
+		PackageVersion:       req.PackageVersion,
+		PackageRelease:       req.PackageRelease,
 	}, nil
 }
 
