@@ -472,7 +472,22 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		}
 
 		// get ignored files hash and add to .{Name}.metadata
-		metadataFile := fmt.Sprintf(".%s.metadata", md.Name)
+		metadataFile := ""
+		ls, err := md.Worktree.Filesystem.ReadDir(".")
+		if err != nil {
+			return nil, fmt.Errorf("could not read directory: %v", err)
+		}
+		for _, f := range ls {
+			if strings.HasSuffix(f.Name(), ".metadata") {
+				if metadataFile != "" {
+					return nil, fmt.Errorf("multiple metadata files found")
+				}
+				metadataFile = f.Name()
+			}
+		}
+		if metadataFile == "" {
+			metadataFile = fmt.Sprintf(".%s.metadata", md.Name)
+		}
 		metadata, err := w.Filesystem.Create(metadataFile)
 		if err != nil {
 			return nil, fmt.Errorf("could not create metadata file: %v", err)

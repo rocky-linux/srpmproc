@@ -21,6 +21,7 @@
 package main
 
 import (
+	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"github.com/spf13/cobra"
 	"log"
@@ -47,7 +48,7 @@ func runFetch(_ *cobra.Command, _ []string) {
 		log.Fatalf("could not get working directory: %v", err)
 	}
 
-	err = srpmproc.Fetch(os.Stdout, cdnUrl, wd, nil)
+	err = srpmproc.Fetch(os.Stdout, cdnUrl, wd, osfs.New("/"), nil)
 	if err != nil {
 		log.Fatal(err)
 	}

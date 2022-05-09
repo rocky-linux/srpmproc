@@ -235,7 +235,24 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		return fmt.Errorf("could not add Worktree: %v", err)
 	}
 
-	metadataFile, err := md.Worktree.Filesystem.Open(fmt.Sprintf(".%s.metadata", md.Name))
+	metadataPath := ""
+	ls, err := md.Worktree.Filesystem.ReadDir(".")
+	if err != nil {
+		return fmt.Errorf("could not read directory: %v", err)
+	}
+	for _, f := range ls {
+		if strings.HasSuffix(f.Name(), ".metadata") {
+			if metadataPath != "" {
+				return fmt.Errorf("multiple metadata files found")
+			}
+			metadataPath = f.Name()
+		}
+	}
+	if metadataPath == "" {
+		metadataPath = fmt.Sprintf(".%s.metadata", md.Name)
+	}
+
+	metadataFile, err := md.Worktree.Filesystem.Open(metadataPath)
 	if err != nil {
 		pd.Log.Printf("warn: could not open metadata file, so skipping: %v", err)
 		return nil

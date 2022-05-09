@@ -27,7 +27,7 @@ func GetTagImportRegex(pd *data.ProcessData) *regexp.Regexp {
 		initialVerRegex += ".+"
 	}
 
-	regex := fmt.Sprintf("refs/tags/(imports/(%s)/(%s))", branchRegex, initialVerRegex)
+	regex := fmt.Sprintf("(?i)refs/tags/(imports/(%s)/(%s))", branchRegex, initialVerRegex)
 
 	return regexp.MustCompile(regex)
 }

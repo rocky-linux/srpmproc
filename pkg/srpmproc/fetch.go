@@ -3,6 +3,7 @@ package srpmproc
 import (
 	"errors"
 	"fmt"
+	"github.com/go-git/go-billy/v5"
 	"github.com/rocky-linux/srpmproc/pkg/blob"
 	"github.com/rocky-linux/srpmproc/pkg/data"
 	"io"
@@ -14,26 +15,26 @@ import (
 	"strings"
 )
 
-func Fetch(logger io.Writer, cdnUrl string, dir string, storage blob.Storage) error {
+func Fetch(logger io.Writer, cdnUrl string, dir string, fs billy.Filesystem, storage blob.Storage) error {
 	pd := &data.ProcessData{
 		Log: log.New(logger, "", log.LstdFlags),
 	}
 
 	metadataPath := ""
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(path, ".metadata") {
-			if metadataPath != "" {
-				return errors.New("multiple metadata files")
-			}
-			metadataPath = path
-		}
-		return nil
-	})
+	ls, err := fs.ReadDir(dir)
 	if err != nil {
 		return err
 	}
+	for _, f := range ls {
+		if strings.HasSuffix(f.Name(), ".metadata") {
+			if metadataPath != "" {
+				return errors.New("multiple metadata files found")
+			}
+			metadataPath = filepath.Join(dir, f.Name())
+		}
+	}
 
-	metadataFile, err := os.Open(metadataPath)
+	metadataFile, err := fs.Open(metadataPath)
 	if err != nil {
 		return fmt.Errorf("could not open metadata file: %v", err)
 	}
@@ -103,7 +104,7 @@ func Fetch(logger io.Writer, cdnUrl string, dir string, storage blob.Storage) er
 			return fmt.Errorf("could create all directories")
 		}
 
-		f, err := os.Create(filepath.Join(dir, path))
+		f, err := fs.Create(filepath.Join(dir, path))
 		if err != nil {
 			return fmt.Errorf("could not open file pointer: %v", err)
 		}
