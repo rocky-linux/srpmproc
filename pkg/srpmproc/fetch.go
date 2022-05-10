@@ -57,9 +57,9 @@ func Fetch(logger io.Writer, cdnUrl string, dir string, fs billy.Filesystem, sto
 			continue
 		}
 
-		lineInfo := strings.Split(line, " ")
-		hash := lineInfo[0]
-		path := lineInfo[1]
+		lineInfo := strings.SplitN(line, " ", 2)
+		hash := strings.TrimSpace(lineInfo[0])
+		path := strings.TrimSpace(lineInfo[1])
 
 		url := fmt.Sprintf("%s/%s", cdnUrl, hash)
 		if storage != nil {
