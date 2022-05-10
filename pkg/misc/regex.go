@@ -8,21 +8,21 @@ import (
 )
 
 func GetTagImportRegex(pd *data.ProcessData) *regexp.Regexp {
-	branchRegex := fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)
+	branchRegex := regexp.QuoteMeta(fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix))
 	if !pd.StrictBranchMode {
 		branchRegex += "(?:.+|)"
 	} else {
 		branchRegex += "(?:-stream-.+|)"
 	}
 
-	initialVerRegex := filepath.Base(pd.RpmLocation) + "-"
+	initialVerRegex := regexp.QuoteMeta(filepath.Base(pd.RpmLocation)) + "-"
 	if pd.PackageVersion != "" {
-		initialVerRegex += pd.PackageVersion + "-"
+		initialVerRegex += regexp.QuoteMeta(pd.PackageVersion) + "-"
 	} else {
 		initialVerRegex += ".+-"
 	}
 	if pd.PackageRelease != "" {
-		initialVerRegex += pd.PackageRelease
+		initialVerRegex += regexp.QuoteMeta(pd.PackageRelease)
 	} else {
 		initialVerRegex += ".+"
 	}
