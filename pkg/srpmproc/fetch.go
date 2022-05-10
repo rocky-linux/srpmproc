@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -32,6 +31,9 @@ func Fetch(logger io.Writer, cdnUrl string, dir string, fs billy.Filesystem, sto
 			}
 			metadataPath = filepath.Join(dir, f.Name())
 		}
+	}
+	if metadataPath == "" {
+		return errors.New("no metadata file found")
 	}
 
 	metadataFile, err := fs.Open(metadataPath)
@@ -99,9 +101,9 @@ func Fetch(logger io.Writer, cdnUrl string, dir string, fs billy.Filesystem, sto
 			return fmt.Errorf("checksum in metadata does not match dist-git file")
 		}
 
-		err = os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0755)
+		err = fs.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0755)
 		if err != nil {
-			return fmt.Errorf("could create all directories")
+			return fmt.Errorf("could not create all directories")
 		}
 
 		f, err := fs.Create(filepath.Join(dir, path))
