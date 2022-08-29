@@ -116,7 +116,6 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 				if exists != nil && exists.when.After(tag.Tagger.When) {
 					return nil
 				}
-
 				latestTags[match[2]] = &remoteTarget{
 					remote: refSpec,
 					when:   tag.Tagger.When,
@@ -126,12 +125,46 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 		return nil
 	}
 
-	tagIter, err := repo.TagObjects()
-	if err != nil {
+
+  // In case of "tagless mode", we need to get the head ref of the branch instead
+  // This is a kind of alternative implementation of the above tagAdd assignment
+	refAdd := func(tag *object.Tag) error {  
+		if strings.HasPrefix(tag.Name, fmt.Sprintf("refs/heads/%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)) {
+			pd.Log.Printf("Tagless mode:  Identified tagless commit for import: %s\n", tag.Name)
+			refSpec := fmt.Sprintf(tag.Name)
+			
+			
+			// We split the string by "/", the branch name we're looking for to pass to latestTags is always last
+			// (ex: "refs/heads/c9s" ---> we want latestTags[c9s]
+			_tmpRef := strings.Split(refSpec, "/")
+			_branchName := _tmpRef[(len(_tmpRef) - 1)]
+			
+
+  		latestTags[_branchName] = &remoteTarget{
+					remote: refSpec,
+					when:   tag.Tagger.When,
+				}
+		}
+		return nil
+	}
+
+  
+  tagIter, err := repo.TagObjects()
+
+  if err != nil {
 		return nil, fmt.Errorf("could not get tag objects: %v", err)
 	}
-	_ = tagIter.ForEach(tagAdd)
+	
 
+  // tagless mode means we use "refAdd" (add commit by reference)
+  // normal mode means we can rely on "tagAdd" (the tag should be present for us in the source repo)
+	if pd.TaglessMode == true {
+	  _ = tagIter.ForEach(refAdd)
+	}	else {
+  	_ = tagIter.ForEach(tagAdd)
+  }
+  
+  
 	listOpts := &git.ListOptions{
 		Auth: pd.Authenticator,
 	}
@@ -157,24 +190,34 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 		if err != nil {
 			continue
 		}
-		_ = tagAdd(&object.Tag{
-			Name:   strings.TrimPrefix(string(ref.Name()), "refs/tags/"),
-			Tagger: commit.Committer,
-		})
+		
+		
+		// Call refAdd instead of tagAdd in the case of TaglessMode enabled
+		if pd.TaglessMode == true {
+		  _ = refAdd(&object.Tag{
+			  Name:   string(ref.Name()),
+			  Tagger: commit.Committer,
+		  })		  
+		} else {
+		  _ = tagAdd(&object.Tag{
+			  Name:   strings.TrimPrefix(string(ref.Name()), "refs/tags/"),
+			  Tagger: commit.Committer,
+		  })
+		}
+		
 	}
 
 	for _, branch := range latestTags {
 		pd.Log.Printf("tag: %s", strings.TrimPrefix(branch.remote, "refs/tags/"))
 		branches = append(branches, *branch)
 	}
-
 	sort.Sort(branches)
 
 	var sortedBranches []string
 	for _, branch := range branches {
 		sortedBranches = append(sortedBranches, branch.remote)
 	}
-
+  
 	return &data.ModeData{
 		Name:       filepath.Base(pd.RpmLocation),
 		Repo:       repo,

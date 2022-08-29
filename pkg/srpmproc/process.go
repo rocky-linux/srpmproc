@@ -40,10 +40,12 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+	"bufio"
 
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
@@ -96,6 +98,9 @@ type ProcessDataRequest struct {
 
 	PackageVersion string
 	PackageRelease string
+
+  TaglessMode bool
+  AltLookAside bool
 }
 
 func gitlabify(str string) string {
@@ -235,7 +240,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	if strings.TrimSpace(req.ManualCommits) != "" {
 		manualCs = strings.Split(req.ManualCommits, ",")
 	}
-
+    
 	return &data.ProcessData{
 		Importer:             importer,
 		RpmLocation:          sourceRpmLocation,
@@ -263,6 +268,8 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		Log:                  logger,
 		PackageVersion:       req.PackageVersion,
 		PackageRelease:       req.PackageRelease,
+		TaglessMode:          req.TaglessMode,
+		AltLookAside:         req.AltLookAside,
 	}, nil
 }
 
@@ -274,6 +281,14 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 // all files that are remote goes into .gitignore
 // all ignored files' hash goes into .{Name}.metadata
 func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
+	
+	// if we are using "tagless mode", then we need to jump to a completely different import process:
+	// Version info needs to be derived from rpmbuild + spec file, not tags
+	if pd.TaglessMode == true {
+	  result, err := processRPMTagless(pd)
+	  return result, err
+	}
+	
 	md, err := pd.Importer.RetrieveSource(pd)
 	if err != nil {
 		return nil, err
@@ -345,9 +360,11 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			commitPin[head] = branchCommit[1]
 		}
 	}
+  
+  
 
-	for _, branch := range md.Branches {
-		md.Repo = &sourceRepo
+  for _, branch := range md.Branches {
+    md.Repo = &sourceRepo
 		md.Worktree = &sourceWorktree
 		md.TagBranch = branch
 		for _, source := range md.SourcesToIgnore {
@@ -368,17 +385,20 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 				continue
 			}
 		} else {
-			matchString = md.TagBranch
+			  matchString = md.TagBranch
 		}
 
+    
 		match := misc.GetTagImportRegex(pd).FindStringSubmatch(matchString)
+				
 		md.PushBranch = pd.BranchPrefix + strings.TrimPrefix(match[2], pd.ImportBranchPrefix)
+		
 		newTag := "imports/" + pd.BranchPrefix + strings.TrimPrefix(match[1], "imports/"+pd.ImportBranchPrefix)
 		newTag = strings.Replace(newTag, "%", "_", -1)
 
 		createdFs, err := pd.FsCreator(md.PushBranch)
 		if err != nil {
-			return nil, err
+      return nil, err
 		}
 
 		// create new Repo for final dist
@@ -472,7 +492,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		}
 
 		// get ignored files hash and add to .{Name}.metadata
-		metadataFile := ""
+    metadataFile := ""
 		ls, err := md.Worktree.Filesystem.ReadDir(".")
 		if err != nil {
 			return nil, fmt.Errorf("could not read directory: %v", err)
@@ -650,9 +670,340 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		hashString := obj.Hash.String()
 		latestHashForBranch[md.PushBranch] = hashString
 	}
-
+	
 	return &srpmprocpb.ProcessResponse{
 		BranchCommits:  latestHashForBranch,
 		BranchVersions: versionForBranch,
 	}, nil
 }
+
+
+// Process for when we want to import a tagless repo (like from CentOS Stream)
+func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
+  pd.Log.Println("Tagless mode detected, attempting import of latest commit")
+  
+  md, err := pd.Importer.RetrieveSource(pd)
+  if err != nil {
+    pd.Log.Println("Error detected in  RetrieveSource!")
+    return nil, err
+  }
+  
+  log.Printf("%+v\n", md)
+  md.BlobCache = map[string][]byte{}
+
+  // TODO: add tagless module support  
+  /*
+  remotePrefix := "rpms"
+  if pd.ModuleMode {
+    remotePrefix = "modules"
+  }
+  */
+  
+	// already uploaded blobs are skipped
+	// var alreadyUploadedBlobs []string
+
+	sourceRepo := *md.Repo
+ 	sourceWorktree := *md.Worktree
+
+
+  localPath := ""
+
+
+  for _, branch := range md.Branches {
+    md.Repo = &sourceRepo
+		md.Worktree = &sourceWorktree
+		md.TagBranch = branch
+		
+		for _, source := range md.SourcesToIgnore {
+			source.Expired = true
+		}
+  
+    // Create a temporary place to check out our tag/branch : /tmp/srpmproctmp_<PKG_NAME><RANDOMSTRING>/
+    localPath, _ = os.MkdirTemp("/tmp", fmt.Sprintf("srpmproctmp_%s", md.Name))
+
+    if err := os.RemoveAll(localPath); err != nil {
+      return nil, fmt.Errorf("Could not remove previous temporary directory: %s", localPath)
+    }
+    if err := os.Mkdir(localPath, 0755); err != nil {
+      return nil, fmt.Errorf("Could not create temporary directory: %s", localPath)
+    }
+    
+    // Clone repo into the temporary path, but only the tag we're interested in:
+    // (TODO: will probably need to assign this a variable or use the md struct gitrepo object to perform a successful tag+push later)
+    _, _ = git.PlainClone(localPath, false, &git.CloneOptions{
+  		URL: pd.RpmLocation,
+  		SingleBranch: true,
+  		ReferenceName: plumbing.ReferenceName(branch),
+  	})
+
+    // Now that we're cloned into localPath, we need to "covert" the import into the old format
+    // We want sources to become .PKGNAME.metadata, we want SOURCES and SPECS folders, etc.
+    repoFixed, _ := convertLocalRepo(md.Name, localPath)
+    if !repoFixed {
+      pd.Log.Println("Error converting repository into SOURCES + SPECS + .package.metadata format")
+      return nil, fmt.Errorf("Error converting repository into SOURCES + SPECS + .package.metadata format")
+    }  
+  
+    
+    rpmVersion := getVersionFromSpec(md.Name, localPath, pd.Version)
+    if rpmVersion == "" {
+      return nil, fmt.Errorf("Error using rpm or rpmbuild to build SRPM and determine version info! (tagless mode)")
+    }
+    
+    pd.Log.Println("Successfully determined version of tagless checkout: ", rpmVersion)
+  
+  
+    // Clean up temporary path after succesful import (disabled during development)
+    /*
+    if err := os.RemoveAll(localPath); err != nil {
+      log.Printf("Error cleaning up temporary git checkout directory %s .  Non-fatal, continuing anyway...\n", localPath)
+    }
+    */
+  }
+  
+  return nil, nil
+}
+
+
+// Given a local repo on disk, ensure it's in the "traditional" format.  This means:
+//   - metadata file is named .pkgname.metadata
+//   - metadata file has the old "<SHASUM>  SOURCES/<filename>"  format
+//   - SPECS/ and SOURCES/ exist and are populated correctly
+func convertLocalRepo(pkgName string, localRepo string)   (bool, error)  {
+  
+  // Make sure we have a SPECS and SOURCES folder made:
+  if err := os.MkdirAll(fmt.Sprintf("%s/SOURCES", localRepo), 0755); err != nil {
+      return false, fmt.Errorf("Could not create SOURCES directory in: %s", localRepo)
+  }
+  
+  if err := os.MkdirAll(fmt.Sprintf("%s/SPECS", localRepo), 0755); err != nil {
+      return false, fmt.Errorf("Could not create SPECS directory in: %s", localRepo)
+  }
+    
+  // Loop through each file/folder and operate accordingly:
+  files, err := ioutil.ReadDir(localRepo)
+  if err != nil {
+        return false, err
+  }
+  
+  for _, file := range files {
+    
+    // We don't want to process SOURCES, SPECS, or any of our .git folders
+    if file.Name() == "SOURCES" || file.Name() == "SPECS" || strings.HasPrefix(file.Name(), ".git") {
+      continue
+    }
+      
+    // If we have a metadata "sources" file, we need to read it and convert to the old .<pkgname>.metadata format
+    if file.Name() == "sources" {
+      convertStatus := convertMetaData(pkgName, localRepo)
+      
+      if convertStatus != true {
+        return false, fmt.Errorf("Error converting sources metadata file to .metadata format")
+      }
+      
+      continue
+    }
+    
+    // Any file that ends in a ".spec" should be put into SPECS/
+    if strings.HasSuffix(file.Name(), ".spec") {
+      err := os.Rename(fmt.Sprintf("%s/%s", localRepo, file.Name()),  fmt.Sprintf("%s/SPECS/%s", localRepo, file.Name()) )
+      if err != nil {
+        return false, fmt.Errorf("Error moving .spec file to SPECS/")
+      }
+    }
+    
+    // if a file isn't skipped in one of the above checks, then it must be a file that belongs in SOURCES/
+    os.Rename(fmt.Sprintf("%s/%s", localRepo, file.Name()),  fmt.Sprintf("%s/SOURCES/%s", localRepo, file.Name()) )
+  }
+  
+  return true, nil
+}
+
+
+// Given a local "sources" metadata file (new CentOS Stream format), convert it into the older 
+// classic CentOS style:  "<HASH>  SOURCES/<FILENAME>"
+func convertMetaData(pkgName string, localRepo string) (bool) {
+    
+    lookAside, err := os.Open(fmt.Sprintf("%s/sources", localRepo))
+    if err != nil {
+      return false
+    }
+      
+    // Split file into lines and start processing:
+    scanner := bufio.NewScanner(lookAside)
+    scanner.Split(bufio.ScanLines)
+    
+    // convertedLA is our array of new "converted" lookaside lines
+    var convertedLA []string
+    
+    // loop through each line, and:
+    //   - split by whitespace
+    //   - check each line begins with "SHA" or "MD" - validate
+    //   - take the 
+    // Then check
+    for scanner.Scan() {
+      
+      tmpLine := strings.Fields(scanner.Text())
+      // make sure line starts with a "SHA" or "MD" before processing - otherwise it might not be a valid format lookaside line!
+      if !(strings.HasPrefix(tmpLine[0], "SHA") || strings.HasPrefix(tmpLine[0], "MD")) {
+        continue
+      }
+      
+      // Strip out "( )" characters from file name and prepend SOURCES/ to it
+      tmpLine[1] = strings.ReplaceAll(tmpLine[1], "(", "" )
+      tmpLine[1] = strings.ReplaceAll(tmpLine[1], ")", "" )
+      tmpLine[1] = fmt.Sprintf("SOURCES/%s", tmpLine[1])
+      
+      convertedLA = append(convertedLA, fmt.Sprintf("%s %s", tmpLine[3], tmpLine[1]) )
+      
+    }
+    lookAside.Close()
+    
+    // open .<NAME>.metadata file for writing our old-format lines 
+    lookAside, err = os.OpenFile(fmt.Sprintf("%s/.%s.metadata", localRepo, pkgName), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+      fmt.Errorf("Error opening new .metadata file for writing.")
+      return false
+    }
+    
+    writer := bufio.NewWriter(lookAside)
+    
+    for _, convertedLine := range convertedLA {
+      _, _ = writer.WriteString(convertedLine + "\n")
+    } 
+    
+    writer.Flush()
+    lookAside.Close()
+    
+    // Remove old "sources" metadata file - we don't need it now that conversion is complete
+    os.Remove(fmt.Sprintf("%s/sources", localRepo))
+    
+    return true
+}
+
+
+// Given a local checked out folder and package name, including SPECS/ , SOURCES/ , and .package.metadata, this will:
+//   - create a "dummy" SRPM (using dummy sources files we use to populate tarballs from lookaside)
+//   - extract RPM version info from that SRPM, and return it
+// If we are in tagless mode, we need to get a package version somehow!
+func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) (string) {
+
+  // Make sure we have "rpm" and "rpmbuild" and "cp" available in our PATH.  Otherwise, this won't work:
+  _, err := exec.LookPath("rpm")
+	if err != nil {
+		return ""
+	}
+
+  _, err = exec.LookPath("rpmbuild")
+	if err != nil {
+		return ""
+	}
+	
+	_, err = exec.LookPath("cp")
+	if err != nil {
+		return ""
+	}
+	
+
+  // create separate temp folder space to do our RPM work - we don't want to accidentally contaminate the main Git area:
+  rpmBuildPath := fmt.Sprintf("%s_rpm", localRepo)
+  os.Mkdir(rpmBuildPath, 0755 )
+  
+  // Copy SOURCES/ and SPECS/ into the temp rpmbuild directory recursively
+  // Yes, we could create or import an elaborate Go-native way to do this, but damnit this is easier:
+  cmdArgs := strings.Fields(fmt.Sprintf("cp -rp %s/SOURCES %s/SPECS %s/",  localRepo, localRepo, rpmBuildPath))
+  if err := exec.Command(cmdArgs[0], cmdArgs[1:]... ).Run(); err != nil {
+	  log.Println(err)
+	  return ""
+  }
+
+  
+  // Loop through .<package>.metadata and get the file names we need to make our SRPM:  
+  lookAside, err := os.Open(fmt.Sprintf("%s/.%s.metadata", localRepo, pkgName) )
+  if err != nil {
+    log.Println(err)
+    return ""
+  }
+      
+  // Split file into lines and start processing:
+  scanner := bufio.NewScanner(lookAside)
+  scanner.Split(bufio.ScanLines)
+  
+  // loop through each line, and:
+  //   - isolate the SOURCES/filename entry
+  //   - write out a dummy file of the same name to rpmBuildPath/SOURCES
+  for scanner.Scan() {
+    
+    // lookaside source is always the 2nd part of the line (after the long SHA sum)
+    srcFile := strings.Fields(scanner.Text())[1]
+    
+    // write a dummy file of the same name into the rpmbuild SOURCES/ directory:
+    dummyFile, err := os.OpenFile(fmt.Sprintf("%s/%s", rpmBuildPath, srcFile), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+      return ""
+    }
+    writer := bufio.NewWriter(dummyFile)
+    _, _ = writer.WriteString("This is a dummy lookaside file generated by srpmproc.  It is only needed to get a working SRPM and extract version information.  Please disregard\n")
+    writer.Flush()
+    dummyFile.Close()
+  }
+  
+  lookAside.Close()
+
+
+  // Now, call rpmbuild to produce the dummy src file:
+  // Example:  rpmbuild  --define "_topdir  /tmp/srpmproctmp_httpd1988142783_rpm"  -bs /tmp/srpmproctmp_httpd1988142783_rpm/SPECS/*.spec
+  cmd := exec.Command("rpmbuild", fmt.Sprintf(`--define=_topdir  %s`, rpmBuildPath), fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-bs", fmt.Sprintf("%s/SPECS/%s.spec", rpmBuildPath, pkgName) )
+  if err := cmd.Run(); err != nil {
+	  log.Println(err)
+	  return ""
+  }
+  
+  // Read the first file from the SRPMS/ folder in rpmBuildPath.  It should be the SRPM that rpmbuild produced above
+  // (there should only be one file - we check that it ends in ".rpm" just to be sure!)
+  lsTmp, err := ioutil.ReadDir(fmt.Sprintf("%s/SRPMS/", rpmBuildPath))
+  if err != nil {
+    log.Println(err)
+    return ""
+  }
+  
+  srpmFile := lsTmp[0].Name()
+  
+  if !strings.HasSuffix(srpmFile, ".rpm") {
+    log.Println("Error, file found in dummy SRPMS directory did not have an .rpm extension!  Perhaps rpmbuild didn't produce a proper source RPM?")
+    return ""
+  }
+  
+  
+  // Call the rpm binary to extract the version-release info out of it, and tack on ".el<VERSION>" at the end:
+  cmd = exec.Command("rpm", "-qp", "--qf", `%{NAME}-%{VERSION}-%{RELEASE}\n`, fmt.Sprintf("%s/SRPMS/%s", rpmBuildPath, srpmFile) )
+    nvrTmp, err := cmd.CombinedOutput()
+  if err != nil {
+    log.Println("Error running rpm command to extract temporary SRPM name-version-release identifiers.")
+    log.Println("rpmbuild output: ", string(nvrTmp))
+    log.Println("rpmbuild command: ", cmd.String())
+    return ""
+  }
+
+  // Pull first line of the rpm command's output to get the name-version-release number (there should only be 1 line)
+  nvr := string(nvrTmp)  
+  nvr = strings.Fields(nvr)[0]
+    
+  // Clean up: delete the temporary directory
+  if err := os.RemoveAll(rpmBuildPath); err != nil {
+    log.Printf("Error cleaning up temporary RPM directory %s .  Non-fatal, continuing anyway...\n", rpmBuildPath)
+  }
+
+  // return name-version-release string we derived:
+  log.Printf("Derived NVR %s from tagless repo via temporary SRPM build\n", nvr)
+  return nvr
+  
+}
+
+
+
+
+
+
+
+
