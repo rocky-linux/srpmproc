@@ -656,6 +656,13 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		}
 
 		pushRefspecs = append(pushRefspecs, config.RefSpec("HEAD:"+plumbing.NewTagReferenceName(newTag)))
+		
+		
+		
+    fmt.Printf("pushRefspecs ==   %+v \n", pushRefspecs)
+    fmt.Println("blah blah blah")
+
+    
 
 		err = repo.Push(&git.PushOptions{
 			RemoteName: "origin",
@@ -679,6 +686,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 
 // Process for when we want to import a tagless repo (like from CentOS Stream)
+//
 func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
   pd.Log.Println("Tagless mode detected, attempting import of latest commit")
   
@@ -692,15 +700,51 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
   md.BlobCache = map[string][]byte{}
 
   // TODO: add tagless module support  
-  /*
+  
   remotePrefix := "rpms"
   if pd.ModuleMode {
     remotePrefix = "modules"
   }
-  */
+  
   
 	// already uploaded blobs are skipped
 	// var alreadyUploadedBlobs []string
+
+  // Set up our remote URL for pushing our repo to
+	var tagIgnoreList []string
+	if pd.NoDupMode {
+		repo, err := git.Init(memory.NewStorage(), memfs.New())
+		if err != nil {
+			return nil, fmt.Errorf("could not init git repo: %v", err)
+		}
+		remoteUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
+		refspec := config.RefSpec("+refs/heads/*:refs/remotes/origin/*")
+
+		remote, err := repo.CreateRemote(&config.RemoteConfig{
+			Name:  "origin",
+			URLs:  []string{remoteUrl},
+			Fetch: []config.RefSpec{refspec},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("could not create remote: %v", err)
+		}
+
+		list, err := remote.List(&git.ListOptions{
+			Auth: pd.Authenticator,
+		})
+		if err != nil {
+			log.Println("ignoring no-dup-mode")
+		} else {
+			for _, ref := range list {
+				if !strings.HasPrefix(string(ref.Name()), "refs/tags/imports") {
+					continue
+				}
+				tagIgnoreList = append(tagIgnoreList, string(ref.Name()))
+			}
+		}
+	}
+
+
 
 	sourceRepo := *md.Repo
  	sourceWorktree := *md.Worktree
@@ -752,11 +796,172 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
     
     pd.Log.Println("Successfully determined version of tagless checkout: ", rpmVersion)
   
+    
+    
+    md.PushBranch = fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix)
+    
+    
+    
+        
+    // Make an initial repo we will use to push to our target
+    pushRepo, err := git.PlainInit(localPath + "_gitpush", false)
+ 		if err != nil {
+			return nil, fmt.Errorf("could not create new dist Repo: %v", err)
+		}
+
+    w, err := pushRepo.Worktree()
+		if err != nil {
+			return nil, fmt.Errorf("could not get dist Worktree: %v", err)
+		}
+        
+    
+    // Create a remote "origin" in our empty git, make the upstream equal to the branch we want to modify
+    pushUrl := fmt.Sprintf("%s/%s/%s.git", pd.UpstreamPrefix, remotePrefix, gitlabify(md.Name))
+    refspec := config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", md.PushBranch, md.PushBranch))
+    
+    // Make our remote repo the target one - the one we want to push our update to
+    pushRepoRemote, err := pushRepo.CreateRemote(&config.RemoteConfig{
+			Name:  "origin",
+			URLs:  []string{pushUrl},
+			Fetch: []config.RefSpec{refspec},
+		})
+ 		if err != nil {
+			return nil, fmt.Errorf("could not create remote: %v", err)
+		}
+    
+    // fetch our branch data (md.PushBranch) into this new repo
+    err = pushRepo.Fetch(&git.FetchOptions{
+			RemoteName: "origin",
+			RefSpecs:   []config.RefSpec{refspec},
+			Auth:       pd.Authenticator,
+		})
+
+    
+    refName := plumbing.NewBranchReferenceName(md.PushBranch)
+
+		var hash plumbing.Hash
+		h := plumbing.NewSymbolicReference(plumbing.HEAD, refName)
+		if err := pushRepo.Storer.CheckAndSetReference(h, nil); err != nil {
+				return nil, fmt.Errorf("Could not set symbolic reference: %v", err)
+		}
+		
+		err = w.Checkout(&git.CheckoutOptions{
+		  Branch: plumbing.NewRemoteReferenceName("origin", md.PushBranch),
+		  Hash: hash,
+		  Force: true,
+		})
+		
+    
+    os.Rename(fmt.Sprintf("%s/SPECS", localPath),  fmt.Sprintf("%s_gitpush/SPECS", localPath) )
+    os.Rename(fmt.Sprintf("%s/SOURCES", localPath),  fmt.Sprintf("%s_gitpush/SOURCES", localPath) )
+    os.Rename(fmt.Sprintf("%s/.gitignore", localPath),  fmt.Sprintf("%s_gitpush/.gitignore", localPath) )
+    os.Rename(fmt.Sprintf("%s/.%s.metadata", localPath, md.Name ),  fmt.Sprintf("%s_gitpush/.%s.metadata", localPath, md.Name) )
+    
+    
+    err = w.AddWithOptions(&git.AddOptions{All: true} )
+    if err != nil {
+      fmt.Printf("ERROR == %v \n", err)
+      return nil, fmt.Errorf("Error adding SOURCES/ , SPECS/ or .metadata file to commit list.")
+    }
+    
+    status, err := w.Status()
+    fmt.Println("Current repo status == ", status)
+    
+    
+    // assign tag for our new remote we're about to push (derived from the SRPM version)
+    newTag := "refs/tags/imports/" + md.PushBranch + "/" + rpmVersion
+    newTag = strings.Replace(newTag, "%", "_", -1)
+
+    // pushRefspecs is a list of all the references we want to push (tags + heads)
+    // It's an array of colon-separated strings which map local references to their remote counterparts
+    var pushRefspecs []config.RefSpec
+    
+    
+    // We need to find out if the remote repo already has this branch
+    // If it doesn't, we want to add *:* to our references for commit.  This will allow us to push the new branch
+    // If it does, we can simply push HEAD:refs/heads/<BRANCH>
+    newRepo := true
+    refList, _ := pushRepoRemote.List(&git.ListOptions{Auth: pd.Authenticator,})
+    for _, ref := range refList {
+      if strings.HasSuffix(ref.Name().String(),  fmt.Sprintf("heads/%s", md.PushBranch)) {
+        newRepo = false
+        break
+      }
+    }
+
+    if newRepo == true {
+      pushRefspecs = append(pushRefspecs, config.RefSpec("*:*"))
+      pd.Log.Printf("Looks like a new remote repo, committing all local objects to new remote branch")
+    }
+    
+    
+    
+    // Identify specific references we want to push
+    // Should be refs/heads/<target_branch>, and a tag called imports/<target_branch>/<rpm_nvr>    
+    pushRefspecs = append(pushRefspecs, config.RefSpec(fmt.Sprintf("HEAD:refs/heads/%s", md.PushBranch)) )
+    pushRefspecs = append(pushRefspecs, config.RefSpec(fmt.Sprintf("HEAD:%s", newTag)) )
+
+    
+    // Actually do the commit (locally)
+    commit, err := w.Commit("import from tagless source "+pd.Importer.ImportName(pd, md), &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  pd.GitCommitterName,
+				Email: pd.GitCommitterEmail,
+				When:  time.Now(),
+			},
+		})        
+    if err != nil {
+			return nil, fmt.Errorf("could not commit object: %v", err)
+		}
+
+ 		obj, err := pushRepo.CommitObject(commit)
+		if err != nil {
+			return nil, fmt.Errorf("could not get commit object: %v", err)
+		}
+
+		pd.Log.Printf("Committed local repo tagless mode transform:\n%s", obj.String())
+    
+       
+    
+    // After commit, we will now tag our local repo on disk:
+    _, err = pushRepo.CreateTag(newTag, commit, &git.CreateTagOptions{
+			Tagger: &object.Signature{
+				Name:  pd.GitCommitterName,
+				Email: pd.GitCommitterEmail,
+				When:  time.Now(),
+			},
+			Message: "import " + md.TagBranch + " from " + pd.RpmLocation + "(import from tagless source)",
+			SignKey: nil,
+		})
+    if err != nil {
+			return nil, fmt.Errorf("could not create tag: %v", err)
+		}
+    
+    pd.Log.Printf("Pushing these references to the remote:  %+v \n", pushRefspecs)
+
+
+    // Do the actual push to the remote target repository
+    err = pushRepo.Push(&git.PushOptions{
+      RemoteName: "origin",
+      Auth: pd.Authenticator,
+      RefSpecs: pushRefspecs,
+      Force: true,
+    })
+    
+    if err != nil {
+			return nil, fmt.Errorf("could not push to remote: %v", err)
+		}
+
   
+    
+    
     // Clean up temporary path after succesful import (disabled during development)
     /*
     if err := os.RemoveAll(localPath); err != nil {
       log.Printf("Error cleaning up temporary git checkout directory %s .  Non-fatal, continuing anyway...\n", localPath)
+    }
+    if err := os.RemoveAll(fmt.Sprintf("%s_gitpush", localPath)); err != nil {
+      log.Printf("Error cleaning up temporary git checkout directory %s .  Non-fatal, continuing anyway...\n", fmt.Sprintf("%s_gitpush", localPath))
     }
     */
   }
