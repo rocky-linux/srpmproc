@@ -56,8 +56,8 @@ var (
 	basicPassword        string
 	packageVersion       string
 	packageRelease       string
-	taglessMode         bool
-	altLookAside        bool
+	taglessMode          bool
+	altLookAside         bool
 )
 
 var root = &cobra.Command{
@@ -97,7 +97,7 @@ func mn(_ *cobra.Command, _ []string) {
 		TaglessMode:          taglessMode,
 		AltLookAside:         altLookAside,
 	})
-	
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -147,9 +147,8 @@ func main() {
 	root.Flags().StringVar(&basicPassword, "basic-password", "", "Basic auth password")
 	root.Flags().StringVar(&packageVersion, "package-version", "", "Package version to fetch")
 	root.Flags().StringVar(&packageRelease, "package-release", "", "Package release to fetch")
-  root.Flags().BoolVar(&taglessMode, "taglessmode", false, "Tagless mode:  If set, pull the latest commit from a branch, and determine version info from spec file (aka upstream versions aren't tagged)")
-  root.Flags().BoolVar(&altLookAside, "altlookaside", false, "If set, uses the new CentOS Stream lookaside pattern (https://<SITE_PREFIX>/<RPM_NAME>/<FILE_NAME>/<SHA_VERSION>/<SHA_SUM>/<FILE_NAME>)")
-
+	root.Flags().BoolVar(&taglessMode, "taglessmode", false, "Tagless mode:  If set, pull the latest commit from a branch, and determine version info from spec file (aka upstream versions aren't tagged)")
+	root.Flags().BoolVar(&altLookAside, "altlookaside", false, "If set, uses the new CentOS Stream lookaside pattern (https://<SITE_PREFIX>/<RPM_NAME>/<FILE_NAME>/<SHA_VERSION>/<SHA_SUM>/<FILE_NAME>)")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
