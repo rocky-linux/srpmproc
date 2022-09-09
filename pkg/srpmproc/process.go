@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
@@ -137,8 +138,13 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	if req.BranchPrefix == "" {
 		req.BranchPrefix = "r"
 	}
-	if req.CdnUrl == "" {
+	if req.CdnUrl == "" && req.AltLookAside == false {
 		req.CdnUrl = "https://git.centos.org/sources"
+	}
+	// If altlookaside is enabled, and the CdnUrl hasn't been changed, then automatically set it to the default
+	// CentOS Stream (the new pattern very much won't work with the old git.centos.org/sources site)
+	if (req.CdnUrl == "https://git.centos.org/sources" || req.CdnUrl == "") && req.AltLookAside == true {
+	  req.CdnUrl = "https://sources.stream.centos.org/sources/rpms"
 	}
 
 	// Validate required
@@ -657,12 +663,6 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 		pushRefspecs = append(pushRefspecs, config.RefSpec("HEAD:"+plumbing.NewTagReferenceName(newTag)))
 		
-		
-		
-    fmt.Printf("pushRefspecs ==   %+v \n", pushRefspecs)
-    fmt.Println("blah blah blah")
-
-    
 
 		err = repo.Push(&git.PushOptions{
 			RemoteName: "origin",
@@ -690,25 +690,30 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
   pd.Log.Println("Tagless mode detected, attempting import of latest commit")
   
+  // In tagless mode, we *automatically* set StrictBranchMode to true
+  // Only the exact <PREFIX><VERSION><SUFFIX> branch should be pulled from the source repo
+  pd.StrictBranchMode = true
+  
+  // our return values: a mapping of branches -> commits (1:1) that we're bringing in, 
+  // and a mapping of branches to: version = X, release = Y 
+  latestHashForBranch := map[string]string{}
+	versionForBranch := map[string]*srpmprocpb.VersionRelease{}
+  
+  
   md, err := pd.Importer.RetrieveSource(pd)
   if err != nil {
     pd.Log.Println("Error detected in  RetrieveSource!")
     return nil, err
   }
   
-  log.Printf("%+v\n", md)
   md.BlobCache = map[string][]byte{}
 
   // TODO: add tagless module support  
-  
   remotePrefix := "rpms"
   if pd.ModuleMode {
     remotePrefix = "modules"
   }
-  
-  
-	// already uploaded blobs are skipped
-	// var alreadyUploadedBlobs []string
+    
 
   // Set up our remote URL for pushing our repo to
 	var tagIgnoreList []string
@@ -745,13 +750,9 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 	}
 
 
-
 	sourceRepo := *md.Repo
  	sourceWorktree := *md.Worktree
-
-
   localPath := ""
-
 
   for _, branch := range md.Branches {
     md.Repo = &sourceRepo
@@ -784,25 +785,29 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
     // We want sources to become .PKGNAME.metadata, we want SOURCES and SPECS folders, etc.
     repoFixed, _ := convertLocalRepo(md.Name, localPath)
     if !repoFixed {
-      pd.Log.Println("Error converting repository into SOURCES + SPECS + .package.metadata format")
       return nil, fmt.Errorf("Error converting repository into SOURCES + SPECS + .package.metadata format")
     }  
   
     
-    rpmVersion := getVersionFromSpec(md.Name, localPath, pd.Version)
-    if rpmVersion == "" {
+    nvrString := getVersionFromSpec(md.Name, localPath, pd.Version)
+    if nvrString == "" {
       return nil, fmt.Errorf("Error using rpm or rpmbuild to build SRPM and determine version info! (tagless mode)")
     }
     
+    // Set version and release fields we extracted (name|version|release are separated by pipes)
+    pd.PackageVersion = strings.Split(nvrString, "|")[1]
+    pd.PackageRelease = strings.Split(nvrString, "|")[2]
+    
+    
+    // Set full rpm version:  name-version-release (for tagging properly)
+    rpmVersion := fmt.Sprintf("%s-%s-%s", md.Name, pd.PackageVersion, pd.PackageRelease)
+    
+    
     pd.Log.Println("Successfully determined version of tagless checkout: ", rpmVersion)
   
-    
-    
     md.PushBranch = fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix)
     
-    
-    
-        
+            
     // Make an initial repo we will use to push to our target
     pushRepo, err := git.PlainInit(localPath + "_gitpush", false)
  		if err != nil {
@@ -858,9 +863,43 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
     os.Rename(fmt.Sprintf("%s/.%s.metadata", localPath, md.Name ),  fmt.Sprintf("%s_gitpush/.%s.metadata", localPath, md.Name) )
     
     
+    
+    md.Repo = pushRepo
+    md.Worktree = w
+
+    // Download lookaside sources (tarballs) into the push git repo:
+    err = pd.Importer.WriteSource(pd, md)
+		if err != nil {
+			return nil, err
+		}
+    
+    
+    // Call function to upload source to target lookaside and 
+    // ensure the sources are added to .gitignore
+    
+    err = processLookasideSources(pd, md, localPath + "_gitpush")
+    if err != nil {
+      return nil, err
+    }
+    
+    
+    // Apply patch(es) if needed:
+    if pd.ModuleMode {
+			err := patchModuleYaml(pd, md)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			err := executePatchesRpm(pd, md)
+			if err != nil {
+				return nil, err
+			}
+		}
+    
+    
+    
     err = w.AddWithOptions(&git.AddOptions{All: true} )
     if err != nil {
-      fmt.Printf("ERROR == %v \n", err)
       return nil, fmt.Errorf("Error adding SOURCES/ , SPECS/ or .metadata file to commit list.")
     }
     
@@ -891,7 +930,7 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 
     if newRepo == true {
       pushRefspecs = append(pushRefspecs, config.RefSpec("*:*"))
-      pd.Log.Printf("Looks like a new remote repo, committing all local objects to new remote branch")
+      pd.Log.Printf("New remote repo detected, creating new remote branch")
     }
     
     
@@ -952,21 +991,31 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			return nil, fmt.Errorf("could not push to remote: %v", err)
 		}
 
-  
-    
-    
-    // Clean up temporary path after succesful import (disabled during development)
-    /*
     if err := os.RemoveAll(localPath); err != nil {
       log.Printf("Error cleaning up temporary git checkout directory %s .  Non-fatal, continuing anyway...\n", localPath)
     }
     if err := os.RemoveAll(fmt.Sprintf("%s_gitpush", localPath)); err != nil {
       log.Printf("Error cleaning up temporary git checkout directory %s .  Non-fatal, continuing anyway...\n", fmt.Sprintf("%s_gitpush", localPath))
     }
-    */
+    
+    // append our processed branch to the return structures:
+    latestHashForBranch[md.PushBranch] = obj.Hash.String()
+    
+    versionForBranch[md.PushBranch] = &srpmprocpb.VersionRelease{
+      Version: pd.PackageVersion,
+      Release: pd.PackageRelease,
+    }
+    
   }
   
-  return nil, nil
+  fmt.Printf("returning::\n latestHashForBranch == %+v \n\n  versionForBranch == %+v\n\n", latestHashForBranch, versionForBranch)
+  
+  // return struct with all our branch:commit and branch:version+release mappings
+  return &srpmprocpb.ProcessResponse{
+    BranchCommits:  latestHashForBranch,
+    BranchVersions: versionForBranch,
+  }, nil
+   
 }
 
 
@@ -994,7 +1043,7 @@ func convertLocalRepo(pkgName string, localRepo string)   (bool, error)  {
   for _, file := range files {
     
     // We don't want to process SOURCES, SPECS, or any of our .git folders
-    if file.Name() == "SOURCES" || file.Name() == "SPECS" || strings.HasPrefix(file.Name(), ".git") {
+    if file.Name() == "SOURCES" || file.Name() == "SPECS" || strings.HasPrefix(file.Name(), ".git") || file.Name() == "." + pkgName + ".metadata" {
       continue
     }
       
@@ -1181,7 +1230,7 @@ func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) (str
   
   
   // Call the rpm binary to extract the version-release info out of it, and tack on ".el<VERSION>" at the end:
-  cmd = exec.Command("rpm", "-qp", "--qf", `%{NAME}-%{VERSION}-%{RELEASE}\n`, fmt.Sprintf("%s/SRPMS/%s", rpmBuildPath, srpmFile) )
+  cmd = exec.Command("rpm", "-qp", "--qf", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SRPMS/%s", rpmBuildPath, srpmFile) )
     nvrTmp, err := cmd.CombinedOutput()
   if err != nil {
     log.Println("Error running rpm command to extract temporary SRPM name-version-release identifiers.")
@@ -1206,6 +1255,94 @@ func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) (str
 }
 
 
+
+// We need to loop through the lookaside blob files ("SourcesToIgnore"), 
+// and upload them to our target storage (usually an S3 bucket, but could be a local folder)
+// 
+// We also need to add the source paths to .gitignore in the git repo, so we don't accidentally commit + push them
+func processLookasideSources(pd *data.ProcessData, md *data.ModeData, localDir string) (error) {
+ 	
+ 	w := md.Worktree
+ 	metadata, err := w.Filesystem.Create(fmt.Sprintf(".%s.metadata", md.Name) )
+	if err != nil {
+	  return fmt.Errorf("could not create metadata file: %v", err)
+	}
+  
+  // Keep track of files we've already uploaded - don't want duplicates!  
+  var alreadyUploadedBlobs []string
+
+  
+  gitIgnore, err := os.OpenFile(fmt.Sprintf("%s/.gitignore", localDir), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+  if err != nil {
+    return err
+  }
+  
+  
+ 	for _, source := range md.SourcesToIgnore {
+		
+		sourcePath := source.Name
+		_, err := w.Filesystem.Stat(sourcePath)
+		if source.Expired || err != nil {
+			continue
+		}
+
+		sourceFile, err := w.Filesystem.Open(sourcePath)
+		if err != nil {
+			return fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
+		}
+		sourceFileBts, err := ioutil.ReadAll(sourceFile)
+		if err != nil {
+			return fmt.Errorf("could not read the whole of ignored source file: %v", err)
+		}
+
+		source.HashFunction.Reset()
+		_, err = source.HashFunction.Write(sourceFileBts)
+		if err != nil {
+			return fmt.Errorf("could not write bytes to hash function: %v", err)
+		}
+		checksum := hex.EncodeToString(source.HashFunction.Sum(nil))
+		checksumLine := fmt.Sprintf("%s %s\n", checksum, sourcePath)
+		_, err = metadata.Write([]byte(checksumLine))
+		if err != nil {
+			return fmt.Errorf("could not write to metadata file: %v", err)
+		}
+
+		if data.StrContains(alreadyUploadedBlobs, checksum) {
+			continue
+		}
+		exists, err := pd.BlobStorage.Exists(checksum)
+		if err != nil {
+			return  err
+		}
+		if !exists && !pd.NoStorageUpload {
+			err := pd.BlobStorage.Write(checksum, sourceFileBts)
+			if err != nil {
+				return err
+			}
+			pd.Log.Printf("wrote %s to blob storage", checksum)
+		}
+		alreadyUploadedBlobs = append(alreadyUploadedBlobs, checksum) 
+	
+	  // Add this SOURCES/ lookaside file to be excluded
+	  w.Excludes = append(w.Excludes, gitignore.ParsePattern(sourcePath, nil) ) 
+	
+	  // Append the SOURCES/<file> path to .gitignore:
+	  _, err = gitIgnore.Write([]byte(fmt.Sprintf("%s\n", sourcePath)) )
+	  if err != nil {
+	    return err
+	  }
+	
+	}
+
+  	
+	err = gitIgnore.Close()
+	if err != nil {
+	  return err
+	}
+	
+  return nil
+
+}
 
 
 

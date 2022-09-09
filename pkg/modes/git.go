@@ -139,7 +139,13 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 			_tmpRef := strings.Split(refSpec, "/")
 			_branchName := _tmpRef[(len(_tmpRef) - 1)]
 			
-
+			// In the case of "strict branch mode" on, the branch name must match *exactly* with our prefix-version-suffix (like "c8" cannot also match "c8-beta")
+			// If it doesn't, bail out without adding this branch
+			if pd.StrictBranchMode == true && _branchName != fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix) {
+			  return nil
+			}
+      
+       
   		latestTags[_branchName] = &remoteTarget{
 					remote: refSpec,
 					when:   tag.Tagger.When,
@@ -228,56 +234,73 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 }
 
 func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
+	
 	remote, err := md.Repo.Remote("upstream")
-	if err != nil {
-		return fmt.Errorf("could not get upstream remote: %v", err)
+	
+	if err != nil && pd.TaglessMode == false {
+	  return fmt.Errorf("could not get upstream remote: %v", err)
 	}
+	
 
 	var refspec config.RefSpec
 	var branchName string
 
-	if strings.HasPrefix(md.TagBranch, "refs/heads") {
-		refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
-		branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
-	} else {
-		match := misc.GetTagImportRegex(pd).FindStringSubmatch(md.TagBranch)
-		branchName = match[2]
-		refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
-	}
-	pd.Log.Printf("checking out upstream refspec %s", refspec)
-	fetchOpts := &git.FetchOptions{
-		Auth:       pd.Authenticator,
-		RemoteName: "upstream",
-		RefSpecs:   []config.RefSpec{refspec},
-		Tags:       git.AllTags,
-		Force:      true,
-	}
-	err = remote.Fetch(fetchOpts)
-	if err != nil && err != git.NoErrAlreadyUpToDate {
-		if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
-			fetchOpts.Auth = nil
-			err = remote.Fetch(fetchOpts)
-			if err != nil && err != git.NoErrAlreadyUpToDate {
-				return fmt.Errorf("could not fetch upstream: %v", err)
-			}
-		} else {
-			return fmt.Errorf("could not fetch upstream: %v", err)
-		}
-	}
+  fmt.Printf("pd.AltLookaside == %v ,   pd.CdnUrl == %s \n", pd.AltLookAside, pd.CdnUrl)
+  
 
-	err = md.Worktree.Checkout(&git.CheckoutOptions{
-		Branch: plumbing.ReferenceName(md.TagBranch),
-		Force:  true,
-	})
-	if err != nil {
-		return fmt.Errorf("could not checkout source from git: %v", err)
-	}
+  // In the case of tagless mode, we already have the transformed repo sitting in the worktree, 
+  // and don't need to perform any checkout or fetch operations
+  if pd.TaglessMode == false {
+	  if strings.HasPrefix(md.TagBranch, "refs/heads") {
+		  refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
+		  branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
+	  } else {
+		  match := misc.GetTagImportRegex(pd).FindStringSubmatch(md.TagBranch)
+		  branchName = match[2]
+		  refspec = config.RefSpec(fmt.Sprintf("+refs/heads/%s:%s", branchName, md.TagBranch))
+		  fmt.Println("Found branchname that does not start w/ refs/heads :: ", branchName)
+	  }
+	  pd.Log.Printf("checking out upstream refspec %s", refspec)
+	  
+	  
+	  fetchOpts := &git.FetchOptions{
+		  Auth:       pd.Authenticator,
+		  RemoteName: "upstream",
+		  RefSpecs:   []config.RefSpec{refspec},
+		  Tags:       git.AllTags,
+		  Force:      true,
+	  }
+	  err = remote.Fetch(fetchOpts)
+	  if err != nil && err != git.NoErrAlreadyUpToDate {
+		  if err == transport.ErrInvalidAuthMethod || err == transport.ErrAuthenticationRequired {
+			  fetchOpts.Auth = nil
+			  err = remote.Fetch(fetchOpts)
+			  if err != nil && err != git.NoErrAlreadyUpToDate {
+				  return fmt.Errorf("could not fetch upstream: %v", err)
+			  }
+		  } else {
+			  return fmt.Errorf("could not fetch upstream: %v", err)
+		  }
+	  }
 
-	_, err = md.Worktree.Add(".")
-	if err != nil {
-		return fmt.Errorf("could not add Worktree: %v", err)
-	}
+	  err = md.Worktree.Checkout(&git.CheckoutOptions{
+		  Branch: plumbing.ReferenceName(md.TagBranch),
+		  Force:  true,
+	  })
+	  if err != nil {
+		  return fmt.Errorf("could not checkout source from git: %v", err)
+	  }
 
+	  _, err = md.Worktree.Add(".")
+	  if err != nil {
+		  return fmt.Errorf("could not add Worktree: %v", err)
+ 	  }
+  }
+  
+  if pd.TaglessMode == true {
+    branchName = fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)
+  }
+  
 	metadataPath := ""
 	ls, err := md.Worktree.Filesystem.ReadDir(".")
 	if err != nil {
@@ -335,7 +358,32 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 				body = fromBlobStorage
 				pd.Log.Printf("downloading %s from blob storage", hash)
 			} else {
-				url := fmt.Sprintf("%s/%s/%s/%s", pd.CdnUrl, md.Name, branchName, hash)
+			  
+			  url := ""
+			  // Alternate lookaside logic:  if enabled, we pull from a new URL pattern
+			  if pd.AltLookAside == false {
+				  url = fmt.Sprintf("%s/%s/%s/%s", pd.CdnUrl, md.Name, branchName, hash)
+				} else {
+          // We first need the hash algorithm based on length of hash:
+          hashType := "sha512"
+          switch len(hash) {
+          case 128:
+            hashType = "sha512"
+          case 64:
+            hashType = "sha256"
+          case 40:
+            hashType = "sha1"
+          case 32:
+            hashType = "md5" 
+          }
+          
+          // need the name of the file without "SOURCES/":
+          fileName := strings.Split(path, "/")[1]
+          
+          // Alt. lookaside url is of the form: <cdn> / <name> / <filename> / <hashtype> / <hash> / <filename>
+          url = fmt.Sprintf("%s/%s/%s/%s/%s/%s", pd.CdnUrl, md.Name, fileName, hashType, hash, fileName)
+				}
+				
 				pd.Log.Printf("downloading %s", url)
 
 				req, err := http.NewRequest("GET", url, nil)
