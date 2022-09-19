@@ -138,12 +138,12 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	if req.BranchPrefix == "" {
 		req.BranchPrefix = "r"
 	}
-	if req.CdnUrl == "" && req.AltLookAside == false {
+	if req.CdnUrl == "" && !req.AltLookAside {
 		req.CdnUrl = "https://git.centos.org/sources"
 	}
 	// If altlookaside is enabled, and the CdnUrl hasn't been changed, then automatically set it to the default
 	// CentOS Stream (the new pattern very much won't work with the old git.centos.org/sources site)
-	if (req.CdnUrl == "https://git.centos.org/sources" || req.CdnUrl == "") && req.AltLookAside == true {
+	if (req.CdnUrl == "https://git.centos.org/sources" || req.CdnUrl == "") && req.AltLookAside {
 		req.CdnUrl = "https://sources.stream.centos.org/sources/rpms"
 	}
 
@@ -290,7 +290,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 	// if we are using "tagless mode", then we need to jump to a completely different import process:
 	// Version info needs to be derived from rpmbuild + spec file, not tags
-	if pd.TaglessMode == true {
+	if pd.TaglessMode {
 		result, err := processRPMTagless(pd)
 		return result, err
 	}
@@ -780,21 +780,31 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			return nil, fmt.Errorf("Error converting repository into SOURCES + SPECS + .package.metadata format")
 		}
 
-		nvrString := getVersionFromSpec(md.Name, localPath, pd.Version)
-		if nvrString == "" {
-			return nil, fmt.Errorf("Error using rpm or rpmbuild to build SRPM and determine version info! (tagless mode)")
+		// call extra function to determine the proper way to convert the tagless branch name.
+		// c9s becomes r9s (in the usual case), or in the modular case, stream-httpd-2.4-rhel-9.1.0 becomes r9s-stream-httpd-2.4_r9.1.0
+		md.PushBranch = taglessBranchName(branch, pd)
+
+		rpmVersion := ""
+
+		// get name-version-release of tagless repo, only if we're not a module repo:
+		if !pd.ModuleMode {
+			nvrString := getVersionFromSpec(md.Name, localPath, pd.Version)
+			if nvrString == "" {
+				return nil, fmt.Errorf("Error using rpm or rpmbuild to build SRPM and determine version info! (tagless mode)")
+			}
+
+			// Set version and release fields we extracted (name|version|release are separated by pipes)
+			pd.PackageVersion = strings.Split(nvrString, "|")[1]
+			pd.PackageRelease = strings.Split(nvrString, "|")[2]
+
+			// Set full rpm version:  name-version-release (for tagging properly)
+			rpmVersion = fmt.Sprintf("%s-%s-%s", md.Name, pd.PackageVersion, pd.PackageRelease)
+
+			pd.Log.Println("Successfully determined version of tagless checkout: ", rpmVersion)
+		} else {
+			// In case of module mode, we just set rpmVersion to the current date - that's what our tag will end up being
+			rpmVersion = time.Now().Format("2006-01-02")
 		}
-
-		// Set version and release fields we extracted (name|version|release are separated by pipes)
-		pd.PackageVersion = strings.Split(nvrString, "|")[1]
-		pd.PackageRelease = strings.Split(nvrString, "|")[2]
-
-		// Set full rpm version:  name-version-release (for tagging properly)
-		rpmVersion := fmt.Sprintf("%s-%s-%s", md.Name, pd.PackageVersion, pd.PackageRelease)
-
-		pd.Log.Println("Successfully determined version of tagless checkout: ", rpmVersion)
-
-		md.PushBranch = fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix)
 
 		// Make an initial repo we will use to push to our target
 		pushRepo, err := git.PlainInit(localPath+"_gitpush", false)
@@ -858,7 +868,6 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 
 		// Call function to upload source to target lookaside and
 		// ensure the sources are added to .gitignore
-
 		err = processLookasideSources(pd, md, localPath+"_gitpush")
 		if err != nil {
 			return nil, err
@@ -883,7 +892,7 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 		}
 
 		status, err := w.Status()
-		fmt.Println("Current repo status == ", status)
+		pd.Log.Printf("successfully processed:\n%s", status)
 
 		// assign tag for our new remote we're about to push (derived from the SRPM version)
 		newTag := "refs/tags/imports/" + md.PushBranch + "/" + rpmVersion
@@ -905,7 +914,7 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			}
 		}
 
-		if newRepo == true {
+		if newRepo {
 			pushRefspecs = append(pushRefspecs, config.RefSpec("*:*"))
 			pd.Log.Printf("New remote repo detected, creating new remote branch")
 		}
@@ -978,8 +987,6 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 		}
 
 	}
-
-	fmt.Printf("returning::\n latestHashForBranch == %+v \n\n  versionForBranch == %+v\n\n", latestHashForBranch, versionForBranch)
 
 	// return struct with all our branch:commit and branch:version+release mappings
 	return &srpmprocpb.ProcessResponse{
@@ -1300,5 +1307,32 @@ func processLookasideSources(pd *data.ProcessData, md *data.ModeData, localDir s
 	}
 
 	return nil
+
+}
+
+// Given an input branch name to import from, like "refs/heads/c9s", produce the tagless branch name we want to commit to, like "r9s"
+// Modular translation of CentOS stream branches i is also done - branch stream-maven-3.8-rhel-9.1.0  ---->  r9s-stream-maven-3.8_9.1.0
+func taglessBranchName(fullBranch string, pd *data.ProcessData) string {
+
+	// Split the full branch name "refs/heads/blah" to only get the short name - last entry
+	tmpBranch := strings.Split(fullBranch, "/")
+	branch := tmpBranch[len(tmpBranch)-1]
+
+	// Simple case:  if our branch is not a modular stream branch, just return the normal <prefix><version><suffix> pattern
+	if !strings.HasPrefix(branch, "stream-") {
+		return fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix)
+	}
+
+	// index where the "-rhel-" starts near the end of the string
+	rhelSpot := strings.LastIndex(branch, "-rhel-")
+
+	// module name will be everything from the start until that "-rhel-" string (like "stream-httpd-2.4")
+	moduleString := branch[0:rhelSpot]
+
+	// major minor version is everything after the "-rhel-" string
+	majorMinor := branch[rhelSpot+6 : len(branch)]
+
+	// return translated modular branch:
+	return fmt.Sprintf("%s%d%s-%s_%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix, moduleString, majorMinor)
 
 }

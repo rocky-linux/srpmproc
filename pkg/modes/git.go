@@ -128,22 +128,16 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 	// In case of "tagless mode", we need to get the head ref of the branch instead
 	// This is a kind of alternative implementation of the above tagAdd assignment
 	refAdd := func(tag *object.Tag) error {
-		if strings.HasPrefix(tag.Name, fmt.Sprintf("refs/heads/%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)) {
+		if misc.TaglessRefOk(tag.Name, pd) {
 			pd.Log.Printf("Tagless mode:  Identified tagless commit for import: %s\n", tag.Name)
 			refSpec := fmt.Sprintf(tag.Name)
 
 			// We split the string by "/", the branch name we're looking for to pass to latestTags is always last
 			// (ex: "refs/heads/c9s" ---> we want latestTags[c9s]
-			_tmpRef := strings.Split(refSpec, "/")
-			_branchName := _tmpRef[(len(_tmpRef) - 1)]
+			tmpRef := strings.Split(refSpec, "/")
+			tmpBranchName := tmpRef[(len(tmpRef) - 1)]
 
-			// In the case of "strict branch mode" on, the branch name must match *exactly* with our prefix-version-suffix (like "c8" cannot also match "c8-beta")
-			// If it doesn't, bail out without adding this branch
-			if pd.StrictBranchMode == true && _branchName != fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix) {
-				return nil
-			}
-
-			latestTags[_branchName] = &remoteTarget{
+			latestTags[tmpBranchName] = &remoteTarget{
 				remote: refSpec,
 				when:   tag.Tagger.When,
 			}
@@ -159,7 +153,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 
 	// tagless mode means we use "refAdd" (add commit by reference)
 	// normal mode means we can rely on "tagAdd" (the tag should be present for us in the source repo)
-	if pd.TaglessMode == true {
+	if pd.TaglessMode {
 		_ = tagIter.ForEach(refAdd)
 	} else {
 		_ = tagIter.ForEach(tagAdd)
@@ -192,7 +186,7 @@ func (g *GitMode) RetrieveSource(pd *data.ProcessData) (*data.ModeData, error) {
 		}
 
 		// Call refAdd instead of tagAdd in the case of TaglessMode enabled
-		if pd.TaglessMode == true {
+		if pd.TaglessMode {
 			_ = refAdd(&object.Tag{
 				Name:   string(ref.Name()),
 				Tagger: commit.Committer,
@@ -230,7 +224,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 	remote, err := md.Repo.Remote("upstream")
 
-	if err != nil && pd.TaglessMode == false {
+	if err != nil && !pd.TaglessMode {
 		return fmt.Errorf("could not get upstream remote: %v", err)
 	}
 
@@ -239,7 +233,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 	// In the case of tagless mode, we already have the transformed repo sitting in the worktree,
 	// and don't need to perform any checkout or fetch operations
-	if pd.TaglessMode == false {
+	if !pd.TaglessMode {
 		if strings.HasPrefix(md.TagBranch, "refs/heads") {
 			refspec = config.RefSpec(fmt.Sprintf("+%s:%s", md.TagBranch, md.TagBranch))
 			branchName = strings.TrimPrefix(md.TagBranch, "refs/heads/")
@@ -285,7 +279,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		}
 	}
 
-	if pd.TaglessMode == true {
+	if pd.TaglessMode {
 		branchName = fmt.Sprintf("%s%d%s", pd.ImportBranchPrefix, pd.Version, pd.BranchSuffix)
 	}
 
@@ -349,7 +343,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 
 				url := ""
 				// Alternate lookaside logic:  if enabled, we pull from a new URL pattern
-				if pd.AltLookAside == false {
+				if !pd.AltLookAside {
 					url = fmt.Sprintf("%s/%s/%s/%s", pd.CdnUrl, md.Name, branchName, hash)
 				} else {
 					// We first need the hash algorithm based on length of hash:
