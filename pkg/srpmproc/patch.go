@@ -329,11 +329,26 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 	if !pd.TaglessMode {
 		match := misc.GetTagImportRegex(pd).FindStringSubmatch(md.TagBranch)
 		streamBranch := strings.Split(match[2], "-")
+
 		// Force stream to be the same as stream name in branch
-		module.Data.Stream = streamBranch[len(streamBranch)-1]
+		if module.V2 != nil {
+			module.V2.Data.Stream = streamBranch[len(streamBranch)-1]
+		}
+		if module.V3 != nil {
+			module.V3.Data.Stream = streamBranch[len(streamBranch)-1]
+		}
 	}
+
+	var components *modulemd.Components
+	if module.V2 != nil {
+		components = module.V2.Data.Components
+	}
+	if module.V3 != nil {
+		components = module.V3.Data.Components
+	}
+
 	log.Println("This module contains the following rpms:")
-	for name := range module.Data.Components.Rpms {
+	for name := range components.Rpms {
 		pd.Log.Printf("\t- %s", name)
 	}
 
@@ -342,7 +357,7 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 		defaultBranch = fmt.Sprintf("%s%d-stream-%s", pd.BranchPrefix, pd.Version, pd.ModuleFallbackStream)
 	}
 
-	for name, rpm := range module.Data.Components.Rpms {
+	for name, rpm := range components.Rpms {
 		var tipHash string
 		var pushBranch string
 
