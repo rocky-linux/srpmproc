@@ -2,6 +2,5 @@ package rpmutils
 
 import "regexp"
 
-var (
-	Nvr = regexp.MustCompile("^(\\S+)-([\\w~%.+]+)-(\\w+(?:\\.[\\w+]+)+?)(?:\\.(\\w+))?(?:\\.rpm)?$")
-)
+// Nvr is a regular expression that matches a NVR.
+var Nvr = regexp.MustCompile("^(\\S+)-([\\w~%.+]+)-(\\w+(?:\\.[\\w+]+)+?)(?:\\.rpm)?$")
