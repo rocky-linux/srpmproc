@@ -21,11 +21,12 @@
 package main
 
 import (
+	"log"
+	"os"
+
 	"github.com/go-git/go-billy/v5/osfs"
 	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"github.com/spf13/cobra"
-	"log"
-	"os"
 )
 
 var fetch = &cobra.Command{

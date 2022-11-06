@@ -22,9 +22,10 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 	"log"
 	"os"
+
+	"github.com/rocky-linux/srpmproc/pkg/srpmproc"
 
 	"github.com/spf13/cobra"
 )
@@ -97,7 +98,6 @@ func mn(_ *cobra.Command, _ []string) {
 		TaglessMode:          taglessMode,
 		AltLookAside:         altLookAside,
 	})
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -111,7 +111,6 @@ func mn(_ *cobra.Command, _ []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 }
 
 func main() {
