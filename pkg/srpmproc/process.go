@@ -681,7 +681,6 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 }
 
 // Process for when we want to import a tagless repo (like from CentOS Stream)
-//
 func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 	pd.Log.Println("Tagless mode detected, attempting import of latest commit")
 
@@ -1108,41 +1107,48 @@ func convertMetaData(pkgName string, localRepo string) bool {
 // Given a local checked out folder and package name, including SPECS/ , SOURCES/ , and .package.metadata, this will:
 //   - create a "dummy" SRPM (using dummy sources files we use to populate tarballs from lookaside)
 //   - extract RPM version info from that SRPM, and return it
+//
 // If we are in tagless mode, we need to get a package version somehow!
 func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) string {
 	// Make sure we have "rpm" and "rpmbuild" and "cp" available in our PATH.  Otherwise, this won't work:
+	log.Println("Looking for `rpm` in path")
 	_, err := exec.LookPath("rpm")
 	if err != nil {
-		return ""
+		log.Fatalln("Unable to find `rpm` in path")
 	}
 
+	log.Println("Looking for `rpmbuild` in path")
 	_, err = exec.LookPath("rpmbuild")
 	if err != nil {
-		return ""
+		log.Fatalln("Unable to find `rpmbuild` in path")
 	}
 
+	//@todo don't use cp, use native file utils
+	log.Println("Looking for `cp` in path")
 	_, err = exec.LookPath("cp")
 	if err != nil {
-		return ""
+		log.Fatalln("Unable to find `cp` in path")
 	}
 
 	// create separate temp folder space to do our RPM work - we don't want to accidentally contaminate the main Git area:
+	log.Println("Creating temporary directory to do work in")
 	rpmBuildPath := fmt.Sprintf("%s_rpm", localRepo)
-	os.Mkdir(rpmBuildPath, 0o755)
+	if err := os.Mkdir(rpmBuildPath, 0o755); err != nil {
+		log.Fatalf("Unable to mkdir %s: %v\n", rpmBuildPath, err)
+	}
 
 	// Copy SOURCES/ and SPECS/ into the temp rpmbuild directory recursively
 	// Yes, we could create or import an elaborate Go-native way to do this, but damnit this is easier:
+	log.Println("Copying files into temp space")
 	cmdArgs := strings.Fields(fmt.Sprintf("cp -rp %s/SOURCES %s/SPECS %s/", localRepo, localRepo, rpmBuildPath))
 	if err := exec.Command(cmdArgs[0], cmdArgs[1:]...).Run(); err != nil {
-		log.Println(err)
-		return ""
+		log.Fatalln(err)
 	}
 
 	// Loop through .<package>.metadata and get the file names we need to make our SRPM:
 	lookAside, err := os.Open(fmt.Sprintf("%s/.%s.metadata", localRepo, pkgName))
 	if err != nil {
-		log.Println(err)
-		return ""
+		log.Fatalln(err)
 	}
 
 	// Split file into lines and start processing:
@@ -1152,6 +1158,7 @@ func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) stri
 	// loop through each line, and:
 	//   - isolate the SOURCES/filename entry
 	//   - write out a dummy file of the same name to rpmBuildPath/SOURCES
+	log.Println("Creating dummy sources for srpm build")
 	for scanner.Scan() {
 
 		// lookaside source is always the 2nd part of the line (after the long SHA sum)
@@ -1172,34 +1179,42 @@ func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) stri
 
 	// Now, call rpmbuild to produce the dummy src file:
 	// Example:  rpmbuild  --define "_topdir  /tmp/srpmproctmp_httpd1988142783_rpm"  -bs /tmp/srpmproctmp_httpd1988142783_rpm/SPECS/*.spec
-	cmd := exec.Command("rpmbuild", fmt.Sprintf(`--define=_topdir  %s`, rpmBuildPath), fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-bs", fmt.Sprintf("%s/SPECS/%s.spec", rpmBuildPath, pkgName))
+	args := []string{fmt.Sprintf(`--define=_topdir  %s`, rpmBuildPath), fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-bs", fmt.Sprintf("%s/SPECS/%s.spec", rpmBuildPath, pkgName)}
+
+	log.Printf("Executing command: rpmbuild %s\n", strings.Join(args, " "))
+
+	cmd := exec.Command("rpmbuild", args...)
 	if err := cmd.Run(); err != nil {
-		log.Println(err)
-		return ""
+		log.Fatalln(err)
 	}
 
 	// Read the first file from the SRPMS/ folder in rpmBuildPath.  It should be the SRPM that rpmbuild produced above
 	// (there should only be one file - we check that it ends in ".rpm" just to be sure!)
+	log.Println("Checking for produced srpm")
+
 	lsTmp, err := ioutil.ReadDir(fmt.Sprintf("%s/SRPMS/", rpmBuildPath))
 	if err != nil {
-		log.Println(err)
-		return ""
+		log.Fatalln(err)
 	}
 
 	srpmFile := lsTmp[0].Name()
 
 	if !strings.HasSuffix(srpmFile, ".rpm") {
-		log.Println("Error, file found in dummy SRPMS directory did not have an .rpm extension!  Perhaps rpmbuild didn't produce a proper source RPM?")
-		return ""
+		log.Fatalln("Error, file found in dummy SRPMS directory did not have an .rpm extension!  Perhaps rpmbuild didn't produce a proper source RPM?")
 	}
 
+	log.Printf("Found SRPM in output directory: %s\n", srpmFile)
+
 	// Call the rpm binary to extract the version-release info out of it, and tack on ".el<VERSION>" at the end:
-	cmd = exec.Command("rpm", "-qp", "--qf", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SRPMS/%s", rpmBuildPath, srpmFile))
+	args = []string{"-qp", "--qf", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SRPMS/%s", rpmBuildPath, srpmFile)}
+
+	log.Printf("Executing command: rpm %s\n", strings.Join(args, " "))
+
+	cmd = exec.Command("rpm", args...)
 	nvrTmp, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Println("Error running rpm command to extract temporary SRPM name-version-release identifiers.")
-		log.Println("rpmbuild output: ", string(nvrTmp))
-		log.Println("rpmbuild command: ", cmd.String())
+		log.Fatalln("rpmbuild output: ", string(nvrTmp))
 		return ""
 	}
 
