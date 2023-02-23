@@ -49,6 +49,15 @@ type remoteTarget struct {
 	when   time.Time
 }
 
+// Struct to define the possible template values ( {{.Value}} in CDN URL strings:
+type Lookaside struct {
+	Name     string
+	Branch   string
+	Hash     string
+	Hashtype string
+	Filename string
+}
+
 type remoteTargetSlice []remoteTarget
 
 func (p remoteTargetSlice) Len() int {
@@ -487,16 +496,6 @@ func (g *GitMode) ImportName(pd *data.ProcessData, md *data.ModeData) string {
 // Given a cdnUrl string as input, return same string, but with substituted
 // template values ( {{.Name}} , {{.Hash}}, {{.Filename}}, etc. )
 func ProcessUrl(cdnUrl string, name string, branch string, hash string, hashtype string, filename string) (string, bool) {
-
-	// These 5 {{ .Value }} items are possible in our templated string:
-	type Lookaside struct {
-		Name     string
-		Branch   string
-		Hash     string
-		Hashtype string
-		Filename string
-	}
-
 	tmpUrl := Lookaside{name, branch, hash, hashtype, filename}
 
 	// If we run into trouble with our template parsing, we'll just return the cdnUrl, exactly as we found it

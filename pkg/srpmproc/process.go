@@ -121,7 +121,6 @@ func gitlabify(str string) string {
 // List of distros and their lookaside patterns
 // If we find one of these passed as --cdn (ex: "--cdn fedora"), then we override, and assign this URL to be our --cdn-url
 func StaticLookasides() []LookasidePath {
-
 	centos := LookasidePath{
 		Distro: "centos",
 		Url:    "https://git.centos.org/sources/{{.Name}}/{{.Branch}}/{{.Hash}}",
@@ -163,7 +162,6 @@ func FindDistro(cdn string) (string, bool) {
 }
 
 func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
-
 	// Build the logger to use for the data import
 	var writer io.Writer = os.Stdout
 	if req.LogWriter != nil {
