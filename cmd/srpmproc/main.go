@@ -58,7 +58,7 @@ var (
 	packageVersion       string
 	packageRelease       string
 	taglessMode          bool
-	altLookAside         bool
+	cdn                  string
 )
 
 var root = &cobra.Command{
@@ -96,7 +96,7 @@ func mn(_ *cobra.Command, _ []string) {
 		PackageVersion:       packageVersion,
 		PackageRelease:       packageRelease,
 		TaglessMode:          taglessMode,
-		AltLookAside:         altLookAside,
+		Cdn:                  cdn,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -131,7 +131,7 @@ func main() {
 	root.Flags().StringVar(&rpmPrefix, "rpm-prefix", "https://git.centos.org/rpms", "Where to retrieve SRPM content. Only used when source-rpm is not a local file")
 	root.Flags().StringVar(&importBranchPrefix, "import-branch-prefix", "c", "Import branch prefix")
 	root.Flags().StringVar(&branchPrefix, "branch-prefix", "r", "Branch prefix (replaces import-branch-prefix)")
-	root.Flags().StringVar(&cdnUrl, "cdn-url", "https://git.centos.org/sources", "CDN URL to download blobs from")
+	root.Flags().StringVar(&cdnUrl, "cdn-url", "https://git.centos.org/sources", "CDN URL to download blobs from. Simple URL follows default rocky/centos patterns. Can be customized using macros (see docs)")
 	root.Flags().StringVar(&singleTag, "single-tag", "", "If set, only this tag is imported")
 	root.Flags().BoolVar(&noDupMode, "no-dup-mode", false, "If enabled, skips already imported tags")
 	root.Flags().BoolVar(&moduleMode, "module-mode", false, "If enabled, imports a module instead of a package")
@@ -146,8 +146,8 @@ func main() {
 	root.Flags().StringVar(&basicPassword, "basic-password", "", "Basic auth password")
 	root.Flags().StringVar(&packageVersion, "package-version", "", "Package version to fetch")
 	root.Flags().StringVar(&packageRelease, "package-release", "", "Package release to fetch")
-	root.Flags().BoolVar(&taglessMode, "taglessmode", false, "Tagless mode:  If set, pull the latest commit from a branch, and determine version info from spec file (aka upstream versions aren't tagged)")
-	root.Flags().BoolVar(&altLookAside, "altlookaside", false, "If set, uses the new CentOS Stream lookaside pattern (https://<SITE_PREFIX>/<RPM_NAME>/<FILE_NAME>/<SHA_VERSION>/<SHA_SUM>/<FILE_NAME>)")
+	root.Flags().BoolVar(&taglessMode, "taglessmode", false, "Tagless mode:  If set, pull the latest commit from the branch and determine version numbers from spec file.  This is auto-tried if tags aren't found.")
+	root.Flags().StringVar(&cdn, "cdn", "", "CDN URL shortcuts for well-known distros, auto-assigns --cdn-url.  Valid values:  rocky8, rocky, fedora, centos, centos-stream.  Setting this overrides --cdn-url")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)
