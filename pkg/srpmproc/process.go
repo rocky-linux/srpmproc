@@ -122,14 +122,44 @@ func gitlabify(str string) string {
 // If we find one of these passed as --cdn (ex: "--cdn fedora"), then we override, and assign this URL to be our --cdn-url
 func StaticLookasides() []LookasidePath {
 
-	centos := LookasidePath{Distro: "centos", Url: "https://git.centos.org/sources/{{.Name}}/{{.Branch}}/{{.Hash}}"}
-	centosStream := LookasidePath{Distro: "centos-stream", Url: "https://sources.stream.centos.org/sources/rpms/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}"}
-	rocky8 := LookasidePath{Distro: "rocky8", Url: "https://rocky-linux-sources-staging.a1.rockylinux.org/{{.Hash}}"}
-	rocky := LookasidePath{Distro: "rocky", Url: "https://sources.build.resf.org/{{.Hash}}"}
-	fedora := LookasidePath{Distro: "fedora", Url: "https://src.fedoraproject.org/repo/pkgs/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}"}
+	centos := LookasidePath{
+		Distro: "centos",
+		Url:    "https://git.centos.org/sources/{{.Name}}/{{.Branch}}/{{.Hash}}",
+	}
+	centosStream := LookasidePath{
+		Distro: "centos-stream",
+		Url:    "https://sources.stream.centos.org/sources/rpms/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}",
+	}
+	rocky8 := LookasidePath{
+		Distro: "rocky8",
+		Url:    "https://rocky-linux-sources-staging.a1.rockylinux.org/{{.Hash}}",
+	}
+	rocky := LookasidePath{
+		Distro: "rocky",
+		Url:    "https://sources.build.resf.org/{{.Hash}}",
+	}
+	fedora := LookasidePath{
+		Distro: "fedora",
+		Url:    "https://src.fedoraproject.org/repo/pkgs/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}",
+	}
 
 	return []LookasidePath{centos, centosStream, rocky8, rocky, fedora}
 
+}
+
+// Given a "--cdn" entry like "centos", we can search through our struct list of distros, and return the proper lookaside URL
+// If we can't find it, we return false and the calling function will error out
+func FindDistro(cdn string) (string, bool) {
+	var cdnUrl = ""
+
+	// Loop through each distro in the static list defined, try to find a match with "--cdn":
+	for _, distro := range StaticLookasides() {
+		if distro.Distro == strings.ToLower(cdn) {
+			cdnUrl = distro.Url
+			return cdnUrl, true
+		}
+	}
+	return "", false
 }
 
 func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
@@ -170,25 +200,18 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		req.CdnUrl = "https://git.centos.org/sources"
 	}
 
-	// If a Cdn distro is defined, loop through StaticLookasides() array of structs,
+	// If a Cdn distro is defined, we try to find a match from StaticLookasides() array of structs
 	// see if we have a match to --cdn (matching values are things like fedora, centos, rocky8, etc.)
 	// If we match, then we want to short-circuit the CdnUrl to the assigned distro's one
 	if req.Cdn != "" {
+		newCdn, foundDistro := FindDistro(req.Cdn)
 
-		var foundDistro = false
-
-		for _, distro := range StaticLookasides() {
-			if distro.Distro == strings.ToLower(req.Cdn) {
-				foundDistro = true
-				req.CdnUrl = distro.Url
-				logger.Printf("Discovered --cdn distro: %s .  Using override CDN URL Pattern: %s", distro.Distro, req.CdnUrl)
-				break
-			}
-		}
-
-		if foundDistro == false {
+		if !foundDistro {
 			return nil, fmt.Errorf("Error, distro name given as --cdn argument is not valid.")
 		}
+
+		req.CdnUrl = newCdn
+		logger.Printf("Discovered --cdn distro: %s .  Using override CDN URL Pattern: %s", req.Cdn, req.CdnUrl)
 	}
 
 	// Validate required
@@ -406,7 +429,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 	}
 
 	// If we have no valid branches to consider, then we'll automatically switch to attempt a tagless import:
-	if len(md.Branches) <= 0 {
+	if len(md.Branches) == 0 {
 		log.Println("No valid tags (refs/tags/imports/*) found in repository!  Switching to perform a tagless import.")
 		pd.TaglessMode = true
 		result, err := processRPMTagless(pd)

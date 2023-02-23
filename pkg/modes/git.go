@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"path/filepath"
 	"sort"
@@ -361,17 +362,14 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 				fileName := strings.Split(path, "/")[1]
 
 				// Feed our template info to ProcessUrl and transform to the real values: ( {{.Name}}, {{.Branch}}, {{.Hash}}, {{.Hashtype}}, {{.Filename}} )
-				url, err = ProcessUrl(pd.CdnUrl, md.Name, branchName, hash, hashType, fileName)
-				if err != nil {
-					return fmt.Errorf("Could not process CDN URL template(s) in string ( {{ .Variable }} )")
-				}
+				url, hasTemplate := ProcessUrl(pd.CdnUrl, md.Name, branchName, hash, hashType, fileName)
 
 				var req *http.Request
 				var resp *http.Response
 
 				// Download the --cdn-url given, but *only* if it contains template strings ( {{.Name}} , {{.Hash}} , etc. )
 				// Otherwise we need to fall back to the traditional cdn-url patterns
-				if strings.Contains(pd.CdnUrl, "{{") && strings.Contains(pd.CdnUrl, "}}") {
+				if hasTemplate {
 					pd.Log.Printf("downloading %s", url)
 
 					req, err := http.NewRequest("GET", url, nil)
@@ -488,7 +486,7 @@ func (g *GitMode) ImportName(pd *data.ProcessData, md *data.ModeData) string {
 
 // Given a cdnUrl string as input, return same string, but with substituted
 // template values ( {{.Name}} , {{.Hash}}, {{.Filename}}, etc. )
-func ProcessUrl(cdnUrl string, name string, branch string, hash string, hashtype string, filename string) (string, error) {
+func ProcessUrl(cdnUrl string, name string, branch string, hash string, hashtype string, filename string) (string, bool) {
 
 	// These 5 {{ .Value }} items are possible in our templated string:
 	type Lookaside struct {
@@ -501,18 +499,18 @@ func ProcessUrl(cdnUrl string, name string, branch string, hash string, hashtype
 
 	tmpUrl := Lookaside{name, branch, hash, hashtype, filename}
 
+	// If we run into trouble with our template parsing, we'll just return the cdnUrl, exactly as we found it
 	tmpl, err := template.New("").Parse(cdnUrl)
 	if err != nil {
-		panic(err)
+		return cdnUrl, false
 	}
 
 	var result bytes.Buffer
 	err = tmpl.Execute(&result, tmpUrl)
-
 	if err != nil {
-		panic(err)
+		log.Fatalf("ERROR: Could not process CDN URL template(s) from URL string: %s\n", cdnUrl)
 	}
 
-	return result.String(), nil
+	return result.String(), true
 
 }
