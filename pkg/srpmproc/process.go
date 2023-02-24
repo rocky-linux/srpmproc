@@ -101,8 +101,13 @@ type ProcessDataRequest struct {
 	PackageVersion string
 	PackageRelease string
 
-	TaglessMode  bool
-	AltLookAside bool
+	TaglessMode bool
+	Cdn         string
+}
+
+type LookasidePath struct {
+	Distro string
+	Url    string
 }
 
 func gitlabify(str string) string {
@@ -113,7 +118,57 @@ func gitlabify(str string) string {
 	return strings.Replace(str, "+", "plus", -1)
 }
 
+// List of distros and their lookaside patterns
+// If we find one of these passed as --cdn (ex: "--cdn fedora"), then we override, and assign this URL to be our --cdn-url
+func StaticLookasides() []LookasidePath {
+	centos := LookasidePath{
+		Distro: "centos",
+		Url:    "https://git.centos.org/sources/{{.Name}}/{{.Branch}}/{{.Hash}}",
+	}
+	centosStream := LookasidePath{
+		Distro: "centos-stream",
+		Url:    "https://sources.stream.centos.org/sources/rpms/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}",
+	}
+	rocky8 := LookasidePath{
+		Distro: "rocky8",
+		Url:    "https://rocky-linux-sources-staging.a1.rockylinux.org/{{.Hash}}",
+	}
+	rocky := LookasidePath{
+		Distro: "rocky",
+		Url:    "https://sources.build.resf.org/{{.Hash}}",
+	}
+	fedora := LookasidePath{
+		Distro: "fedora",
+		Url:    "https://src.fedoraproject.org/repo/pkgs/{{.Name}}/{{.Filename}}/{{.Hashtype}}/{{.Hash}}/{{.Filename}}",
+	}
+
+	return []LookasidePath{centos, centosStream, rocky8, rocky, fedora}
+
+}
+
+// Given a "--cdn" entry like "centos", we can search through our struct list of distros, and return the proper lookaside URL
+// If we can't find it, we return false and the calling function will error out
+func FindDistro(cdn string) (string, bool) {
+	var cdnUrl = ""
+
+	// Loop through each distro in the static list defined, try to find a match with "--cdn":
+	for _, distro := range StaticLookasides() {
+		if distro.Distro == strings.ToLower(cdn) {
+			cdnUrl = distro.Url
+			return cdnUrl, true
+		}
+	}
+	return "", false
+}
+
 func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
+	// Build the logger to use for the data import
+	var writer io.Writer = os.Stdout
+	if req.LogWriter != nil {
+		writer = req.LogWriter
+	}
+	logger := log.New(writer, "", log.LstdFlags)
+
 	// Set defaults
 	if req.ModulePrefix == "" {
 		req.ModulePrefix = ModulePrefixCentOS
@@ -139,13 +194,22 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	if req.BranchPrefix == "" {
 		req.BranchPrefix = "r"
 	}
-	if req.CdnUrl == "" && !req.AltLookAside {
+	if req.CdnUrl == "" {
 		req.CdnUrl = "https://git.centos.org/sources"
 	}
-	// If altlookaside is enabled, and the CdnUrl hasn't been changed, then automatically set it to the default
-	// CentOS Stream (the new pattern very much won't work with the old git.centos.org/sources site)
-	if (req.CdnUrl == "https://git.centos.org/sources" || req.CdnUrl == "") && req.AltLookAside {
-		req.CdnUrl = "https://sources.stream.centos.org/sources/rpms"
+
+	// If a Cdn distro is defined, we try to find a match from StaticLookasides() array of structs
+	// see if we have a match to --cdn (matching values are things like fedora, centos, rocky8, etc.)
+	// If we match, then we want to short-circuit the CdnUrl to the assigned distro's one
+	if req.Cdn != "" {
+		newCdn, foundDistro := FindDistro(req.Cdn)
+
+		if !foundDistro {
+			return nil, fmt.Errorf("Error, distro name given as --cdn argument is not valid.")
+		}
+
+		req.CdnUrl = newCdn
+		logger.Printf("Discovered --cdn distro: %s .  Using override CDN URL Pattern: %s", req.Cdn, req.CdnUrl)
 	}
 
 	// Validate required
@@ -214,12 +278,6 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		reqFsCreator = req.FsCreator
 	}
 
-	var writer io.Writer = os.Stdout
-	if req.LogWriter != nil {
-		writer = req.LogWriter
-	}
-	logger := log.New(writer, "", log.LstdFlags)
-
 	if req.TmpFsMode != "" {
 		logger.Printf("using tmpfs dir: %s", req.TmpFsMode)
 		fsCreator = func(branch string) (billy.Filesystem, error) {
@@ -276,7 +334,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		PackageVersion:       req.PackageVersion,
 		PackageRelease:       req.PackageRelease,
 		TaglessMode:          req.TaglessMode,
-		AltLookAside:         req.AltLookAside,
+		Cdn:                  req.Cdn,
 	}, nil
 }
 
@@ -334,6 +392,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		list, err := remote.List(&git.ListOptions{
 			Auth: pd.Authenticator,
 		})
+
 		if err != nil {
 			log.Println("ignoring no-dup-mode")
 		} else {
@@ -365,6 +424,14 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			md.Branches = append(md.Branches, head)
 			commitPin[head] = branchCommit[1]
 		}
+	}
+
+	// If we have no valid branches to consider, then we'll automatically switch to attempt a tagless import:
+	if len(md.Branches) == 0 {
+		log.Println("No valid tags (refs/tags/imports/*) found in repository!  Switching to perform a tagless import.")
+		pd.TaglessMode = true
+		result, err := processRPMTagless(pd)
+		return result, err
 	}
 
 	for _, branch := range md.Branches {
