@@ -498,6 +498,11 @@ func (g *GitMode) ImportName(pd *data.ProcessData, md *data.ModeData) string {
 func ProcessUrl(cdnUrl string, name string, branch string, hash string, hashtype string, filename string) (string, bool) {
 	tmpUrl := Lookaside{name, branch, hash, hashtype, filename}
 
+	// Return cdnUrl as-is if we don't have any templates ("{{ .Variable }}") to process:
+	if !(strings.Contains(cdnUrl, "{{") && strings.Contains(cdnUrl, "}}")) {
+		return cdnUrl, false
+	}
+
 	// If we run into trouble with our template parsing, we'll just return the cdnUrl, exactly as we found it
 	tmpl, err := template.New("").Parse(cdnUrl)
 	if err != nil {
