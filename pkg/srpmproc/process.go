@@ -855,7 +855,7 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 
 		// get name-version-release of tagless repo, only if we're not a module repo:
 		if !pd.ModuleMode {
-			nvrString, err := getVersionFromSpec(md.Name, localPath, pd.Version)
+			nvrString, err := getVersionFromSpec(localPath, pd.Version)
 			if err != nil {
 				return nil, err
 			}
@@ -1176,11 +1176,11 @@ func convertMetaData(pkgName string, localRepo string) bool {
 //   - create a "dummy" SRPM (using dummy sources files we use to populate tarballs from lookaside)
 //   - extract RPM version info from that SRPM, and return it
 // If we are in tagless mode, we need to get a package version somehow!
-func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) (string, error) {
+func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 	// Make sure we have "rpm" and "rpmbuild" and "cp" available in our PATH.  Otherwise, this won't work:
 	_, err := exec.LookPath("rpmspec")
 	if err != nil {
-		return "", fmt.Errorf("Error: Could not find rpmspec program in PATH")
+		return "", fmt.Errorf("Could not find rpmspec program in PATH")
 	}
 
 	// Read the first file from SPECS/ to get our spec file
@@ -1192,11 +1192,20 @@ func getVersionFromSpec(pkgName string, localRepo string, majorVersion int) (str
 	specFile := lsTmp[0].Name()
 
 	if !strings.HasSuffix(specFile, ".spec") {
-		return "", fmt.Errorf("Error, first file found in SPECS/ is not a .spec file!  Check the SPECS/ directory in the repo?")
+		return "", fmt.Errorf("First file found in SPECS/ is not a .spec file!  Check the SPECS/ directory in the repo?")
 	}
 
 	// Call the rpmspec binary to extract the version-release info out of it, and tack on ".el<VERSION>" at the end:
-	cmd := exec.Command("rpmspec", "--srpm", fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-q", "--queryformat", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SPECS/%s", localRepo, specFile))
+	cmdArgs := []string{
+		"--srpm",
+		fmt.Sprintf(`--define=dist  .el%d`, majorVersion),
+		"-q",
+		"--queryformat",
+		`%{NAME}|%{VERSION}|%{RELEASE}\n`,
+		fmt.Sprintf("%s/SPECS/%s", localRepo, specFile),
+	}
+	cmd := exec.Command("rpmspec", cmdArgs...)
+	//cmd := exec.Command("rpmspec", "--srpm", fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-q", "--queryformat", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SPECS/%s", localRepo, specFile))
 	nvrTmp, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("Error running rpmspec command to determine RPM name-version-release identifier. \nCommand attempted: %s \nCommand output: %s", cmd.String(), string(nvrTmp))
