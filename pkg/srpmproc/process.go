@@ -1205,7 +1205,6 @@ func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 		fmt.Sprintf("%s/SPECS/%s", localRepo, specFile),
 	}
 	cmd := exec.Command("rpmspec", cmdArgs...)
-	//cmd := exec.Command("rpmspec", "--srpm", fmt.Sprintf(`--define=dist  .el%d`, majorVersion), "-q", "--queryformat", `%{NAME}|%{VERSION}|%{RELEASE}\n`, fmt.Sprintf("%s/SPECS/%s", localRepo, specFile))
 	nvrTmp, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("Error running rpmspec command to determine RPM name-version-release identifier. \nCommand attempted: %s \nCommand output: %s", cmd.String(), string(nvrTmp))
