@@ -413,17 +413,9 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 	if pd.SingleTag != "" {
 		md.Branches = []string{fmt.Sprintf("refs/tags/%s", pd.SingleTag)}
 	} else if len(pd.ManualCommits) > 0 {
-		md.Branches = []string{}
-		for _, commit := range pd.ManualCommits {
-			branchCommit := strings.Split(commit, ":")
-			if len(branchCommit) != 2 {
-				return nil, fmt.Errorf("invalid manual commit list")
-			}
-
-			head := fmt.Sprintf("refs/tags/imports/%s/%s-%s", branchCommit[0], md.Name, branchCommit[1])
-			md.Branches = append(md.Branches, head)
-			commitPin[head] = branchCommit[1]
-		}
+		log.Println("Manual commits were listed for import.  Switching to perform a tagless import of these commit(s).")
+		pd.TaglessMode = true
+		return processRPMTagless(pd)
 	}
 
 	// If we have no valid branches to consider, then we'll automatically switch to attempt a tagless import:
@@ -813,6 +805,20 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 	sourceWorktree := *md.Worktree
 	localPath := ""
 
+	// if a manual commit list is provided, we want to create our md.Branches[] array in a special format:
+	if len(pd.ManualCommits) > 0 {
+		md.Branches = []string{}
+		for _, commit := range pd.ManualCommits {
+			branchCommit := strings.Split(commit, ":")
+			if len(branchCommit) != 2 {
+				return nil, fmt.Errorf("invalid manual commit list")
+			}
+
+			head := fmt.Sprintf("COMMIT:%s:%s", branchCommit[0], branchCommit[1])
+			md.Branches = append(md.Branches, head)
+		}
+	}
+
 	for _, branch := range md.Branches {
 		md.Repo = &sourceRepo
 		md.Worktree = &sourceWorktree
@@ -832,13 +838,35 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			return nil, fmt.Errorf("Could not create temporary directory: %s", localPath)
 		}
 
+		// we'll make our branch we're processing more presentable if it's in the COMMIT:<branch>:<hash> format:
+		if strings.HasPrefix(branch, "COMMIT:") {
+			branch = fmt.Sprintf("refs/heads/%s", strings.Split(branch, ":")[1])
+		}
+
 		// Clone repo into the temporary path, but only the tag we're interested in:
 		// (TODO: will probably need to assign this a variable or use the md struct gitrepo object to perform a successful tag+push later)
-		_, _ = git.PlainClone(localPath, false, &git.CloneOptions{
+		rTmp, err := git.PlainClone(localPath, false, &git.CloneOptions{
 			URL:           pd.RpmLocation,
 			SingleBranch:  true,
 			ReferenceName: plumbing.ReferenceName(branch),
 		})
+		if err != nil {
+			return nil, err
+		}
+
+		// If we're dealing with a special manual commit to import ("COMMIT:<branch>:<githash>"), then we need to check out that
+		// specific hash from the repo we are importing from:
+		if strings.HasPrefix(md.TagBranch, "COMMIT:") {
+			commitList := strings.Split(md.TagBranch, ":")
+
+			wTmp, _ := rTmp.Worktree()
+			err = wTmp.Checkout(&git.CheckoutOptions{
+				Hash: plumbing.NewHash(commitList[2]),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("Could not find manual commit %s in the repository.  Must be a valid commit hash.", commitList[2])
+			}
+		}
 
 		// Now that we're cloned into localPath, we need to "covert" the import into the old format
 		// We want sources to become .PKGNAME.metadata, we want SOURCES and SPECS folders, etc.
@@ -919,6 +947,12 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			Force:  true,
 		})
 
+		// These os commands actually move the data from our cloned import repo to our cloned "push" repo (upstream -> downstream)
+		// First we clobber the target push repo's data, and then move the new data into it from the upstream repo we cloned earlier
+		os.RemoveAll(fmt.Sprintf("%s_gitpush/SPECS", localPath))
+		os.RemoveAll(fmt.Sprintf("%s_gitpush/SOURCES", localPath))
+		os.RemoveAll(fmt.Sprintf("%s_gitpush/.gitignore", localPath))
+		os.RemoveAll(fmt.Sprintf("%s_gitpush/%s.metadata", localPath, md.Name))
 		os.Rename(fmt.Sprintf("%s/SPECS", localPath), fmt.Sprintf("%s_gitpush/SPECS", localPath))
 		os.Rename(fmt.Sprintf("%s/SOURCES", localPath), fmt.Sprintf("%s_gitpush/SOURCES", localPath))
 		os.Rename(fmt.Sprintf("%s/.gitignore", localPath), fmt.Sprintf("%s_gitpush/.gitignore", localPath))
@@ -1052,7 +1086,6 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 			Version: pd.PackageVersion,
 			Release: pd.PackageRelease,
 		}
-
 	}
 
 	// return struct with all our branch:commit and branch:version+release mappings
@@ -1205,7 +1238,7 @@ func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 		fmt.Sprintf("%s/SPECS/%s", localRepo, specFile),
 	}
 	cmd := exec.Command("rpmspec", cmdArgs...)
-	nvrTmp, err := cmd.CombinedOutput()
+	nvrTmp, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("Error running rpmspec command to determine RPM name-version-release identifier. \nCommand attempted: %s \nCommand output: %s", cmd.String(), string(nvrTmp))
 	}
