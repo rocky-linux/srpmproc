@@ -35,6 +35,7 @@ var (
 	sshKeyLocation       string
 	sshUser              string
 	upstreamPrefix       string
+	upstreamVersion      int
 	version              int
 	storageAddr          string
 	gitCommitterName     string
@@ -69,6 +70,7 @@ var root = &cobra.Command{
 func mn(_ *cobra.Command, _ []string) {
 	pd, err := srpmproc.NewProcessData(&srpmproc.ProcessDataRequest{
 		Version:              version,
+		UpstreamVersion:      upstreamVersion,
 		StorageAddr:          storageAddr,
 		Package:              sourceRpm,
 		ModuleMode:           moduleMode,
@@ -120,6 +122,8 @@ func main() {
 	_ = root.MarkFlagRequired("upstream-prefix")
 	root.Flags().IntVar(&version, "version", 0, "Upstream version")
 	_ = root.MarkFlagRequired("version")
+	root.Flags().IntVar(&upstreamVersion, "upstream-version", 0, "Upstream version")
+
 	root.Flags().StringVar(&storageAddr, "storage-addr", "", "Bucket to use as blob storage")
 	_ = root.MarkFlagRequired("storage-addr")
 

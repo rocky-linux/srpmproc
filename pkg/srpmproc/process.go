@@ -69,6 +69,7 @@ const (
 type ProcessDataRequest struct {
 	// Required
 	Version     int
+	UpstreamVersion     int
 	StorageAddr string
 	Package     string
 
@@ -170,6 +171,9 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 	logger := log.New(writer, "", log.LstdFlags)
 
 	// Set defaults
+	if req.UpstreamVersion == 0 {
+		req.UpstreamVersion = req.Version
+	}
 	if req.ModulePrefix == "" {
 		req.ModulePrefix = ModulePrefixCentOS
 	}
@@ -311,6 +315,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		RpmLocation:          sourceRpmLocation,
 		UpstreamPrefix:       req.UpstreamPrefix,
 		Version:              req.Version,
+		UpstreamVersion:      req.UpstreamVersion,
 		BlobStorage:          blobStorage,
 		GitCommitterName:     req.GitCommitterName,
 		GitCommitterEmail:    req.GitCommitterEmail,
@@ -1344,7 +1349,7 @@ func taglessBranchName(fullBranch string, pd *data.ProcessData) string {
 
 	// Simple case:  if our branch is not a modular stream branch, just return the normal <prefix><version><suffix> pattern
 	if !strings.HasPrefix(branch, "stream-") {
-		return fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix)
+		return fmt.Sprintf("%s%d%s", pd.BranchPrefix, pd.UpstreamVersion, pd.BranchSuffix)
 	}
 
 	// index where the "-rhel-" starts near the end of the string
@@ -1357,5 +1362,6 @@ func taglessBranchName(fullBranch string, pd *data.ProcessData) string {
 	majorMinor := branch[rhelSpot+6:]
 
 	// return translated modular branch:
-	return fmt.Sprintf("%s%d%s-%s_%s", pd.BranchPrefix, pd.Version, pd.BranchSuffix, moduleString, majorMinor)
+
+	return fmt.Sprintf("%s%d%s-%s_%s", pd.BranchPrefix, pd.UpstreamVersion, pd.BranchSuffix, moduleString, majorMinor)
 }
