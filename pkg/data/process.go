@@ -60,4 +60,5 @@ type ProcessData struct {
 	PackageRelease       string
 	TaglessMode          bool
 	Cdn                  string
+	ModuleBranchNames    bool
 }
