@@ -660,7 +660,8 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		status, _ := w.Status()
 		if !pd.ModuleMode {
 			if status.IsClean() {
-				return nil, fmt.Errorf("No changes detected. Our downstream is up to date.")
+				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				continue
 			}
 		}
 		pd.Log.Printf("successfully processed:\n%s", status)
@@ -1002,7 +1003,8 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 		status, err := w.Status()
 		if !pd.ModuleMode {
 			if status.IsClean() {
-				return nil, fmt.Errorf("No changes detected. Our downstream is up to date.")
+				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				continue
 			}
 		}
 		pd.Log.Printf("successfully processed:\n%s", status)
