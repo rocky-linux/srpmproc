@@ -397,6 +397,12 @@ func patchModuleYaml(pd *data.ProcessData, md *data.ModeData) error {
 			}
 		}
 
+		// If we got this far, we're good. This means the repos, branches, and commits exist.
+		// If this option is on, just use the branch name.
+		if pd.ModuleBranchNames {
+			tipHash = md.PushBranch
+		}
+
 		rpm.Ref = tipHash
 	}
 

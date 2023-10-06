@@ -59,6 +59,7 @@ var (
 	packageRelease       string
 	taglessMode          bool
 	cdn                  string
+	moduleBranchNames    bool
 )
 
 var root = &cobra.Command{
@@ -97,6 +98,7 @@ func mn(_ *cobra.Command, _ []string) {
 		PackageRelease:       packageRelease,
 		TaglessMode:          taglessMode,
 		Cdn:                  cdn,
+		ModuleBranchNames:    moduleBranchNames,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -148,6 +150,7 @@ func main() {
 	root.Flags().StringVar(&packageRelease, "package-release", "", "Package release to fetch")
 	root.Flags().BoolVar(&taglessMode, "taglessmode", false, "Tagless mode:  If set, pull the latest commit from the branch and determine version numbers from spec file.  This is auto-tried if tags aren't found.")
 	root.Flags().StringVar(&cdn, "cdn", "", "CDN URL shortcuts for well-known distros, auto-assigns --cdn-url.  Valid values:  rocky8, rocky, fedora, centos, centos-stream.  Setting this overrides --cdn-url")
+	root.Flags().BoolVar(&moduleBranchNames, "module-branch-names-only", false, "If enabled, module imports will use the branch name that is being imported, rather than use the commit hash.")
 
 	if err := root.Execute(); err != nil {
 		log.Fatal(err)

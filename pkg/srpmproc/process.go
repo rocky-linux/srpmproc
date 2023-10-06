@@ -103,6 +103,8 @@ type ProcessDataRequest struct {
 
 	TaglessMode bool
 	Cdn         string
+
+	ModuleBranchNames bool
 }
 
 type LookasidePath struct {
@@ -335,6 +337,7 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		PackageRelease:       req.PackageRelease,
 		TaglessMode:          req.TaglessMode,
 		Cdn:                  req.Cdn,
+		ModuleBranchNames:    req.ModuleBranchNames,
 	}, nil
 }
 
@@ -655,6 +658,12 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 
 		// show status
 		status, _ := w.Status()
+		if !pd.ModuleMode {
+			if status.IsClean() {
+				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				continue
+			}
+		}
 		pd.Log.Printf("successfully processed:\n%s", status)
 
 		statusLines := strings.Split(status.String(), "\n")
@@ -740,7 +749,6 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 }
 
 // Process for when we want to import a tagless repo (like from CentOS Stream)
-//
 func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 	pd.Log.Println("Tagless mode detected, attempting import of latest commit")
 
@@ -993,6 +1001,12 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 		}
 
 		status, err := w.Status()
+		if !pd.ModuleMode {
+			if status.IsClean() {
+				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				continue
+			}
+		}
 		pd.Log.Printf("successfully processed:\n%s", status)
 
 		// assign tag for our new remote we're about to push (derived from the SRPM version)
@@ -1208,6 +1222,7 @@ func convertMetaData(pkgName string, localRepo string) bool {
 // Given a local checked out folder and package name, including SPECS/ , SOURCES/ , and .package.metadata, this will:
 //   - create a "dummy" SRPM (using dummy sources files we use to populate tarballs from lookaside)
 //   - extract RPM version info from that SRPM, and return it
+//
 // If we are in tagless mode, we need to get a package version somehow!
 func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 	// Make sure we have "rpm" and "rpmbuild" and "cp" available in our PATH.  Otherwise, this won't work:
@@ -1232,6 +1247,7 @@ func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 	cmdArgs := []string{
 		"--srpm",
 		fmt.Sprintf(`--define=dist  .el%d`, majorVersion),
+		fmt.Sprintf(`--define=_topdir  %s`, localRepo),
 		"-q",
 		"--queryformat",
 		`%{NAME}|%{VERSION}|%{RELEASE}\n`,
