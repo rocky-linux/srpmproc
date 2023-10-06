@@ -19,11 +19,11 @@ builds:
 archives:
   - name_template: >-
       {{- .ProjectName }}_
+      {{- .Version }}
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "arm64" }}aarch64
-      {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end -}}
+      {{- else }}{{ .Arch }}{{ end }}{{ end -}}
 checksum:
   name_template: 'checksums.txt'
 snapshot:
