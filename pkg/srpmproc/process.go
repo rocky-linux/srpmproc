@@ -589,7 +589,7 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 			if err != nil {
 				return nil, fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
 			}
-			sourceFileBts, err := ioutil.ReadAll(sourceFile)
+			sourceFileBts, err := io.ReadAll(sourceFile)
 			if err != nil {
 				return nil, fmt.Errorf("could not read the whole of ignored source file: %v", err)
 			}
@@ -1299,7 +1299,7 @@ func processLookasideSources(pd *data.ProcessData, md *data.ModeData, localDir s
 		if err != nil {
 			return fmt.Errorf("could not open ignored source file %s: %v", sourcePath, err)
 		}
-		sourceFileBts, err := ioutil.ReadAll(sourceFile)
+		sourceFileBts, err := io.ReadAll(sourceFile)
 		if err != nil {
 			return fmt.Errorf("could not read the whole of ignored source file: %v", err)
 		}
