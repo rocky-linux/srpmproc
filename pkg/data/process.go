@@ -34,6 +34,7 @@ type ProcessData struct {
 	RpmLocation          string
 	UpstreamPrefix       string
 	Version              int
+	UpstreamVersion      int
 	GitCommitterName     string
 	GitCommitterEmail    string
 	Mode                 int
