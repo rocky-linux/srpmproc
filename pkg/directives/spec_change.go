@@ -23,7 +23,7 @@ package directives
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -215,7 +215,7 @@ func specChange(cfg *srpmprocpb.Cfg, pd *data.ProcessData, md *data.ModeData, _ 
 		return errors.New("COULD_NOT_READ_SPEC_FILE")
 	}
 
-	specBts, err := ioutil.ReadAll(specFile)
+	specBts, err := io.ReadAll(specFile)
 	if err != nil {
 		return errors.New("COULD_NOT_READ_ALL_BYTES")
 	}

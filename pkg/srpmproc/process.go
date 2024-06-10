@@ -25,7 +25,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -1130,7 +1129,7 @@ func convertLocalRepo(pkgName string, localRepo string) (bool, error) {
 	}
 
 	// Loop through each file/folder and operate accordingly:
-	files, err := ioutil.ReadDir(localRepo)
+	files, err := os.ReadDir(localRepo)
 	if err != nil {
 		return false, err
 	}
@@ -1239,7 +1238,7 @@ func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 
 	// Read the first file from SPECS/ to get our spec file
 	// (there should only be one file - we check that it ends in ".spec" just to be sure!)
-	lsTmp, err := ioutil.ReadDir(fmt.Sprintf("%s/SPECS/", localRepo))
+	lsTmp, err := os.ReadDir(fmt.Sprintf("%s/SPECS/", localRepo))
 	if err != nil {
 		return "", err
 	}

@@ -23,7 +23,7 @@ package modes
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -317,7 +317,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 		return nil
 	}
 
-	fileBytes, err := ioutil.ReadAll(metadataFile)
+	fileBytes, err := io.ReadAll(metadataFile)
 	if err != nil {
 		return fmt.Errorf("could not read metadata file: %v", err)
 	}
@@ -427,7 +427,7 @@ func (g *GitMode) WriteSource(pd *data.ProcessData, md *data.ModeData) error {
 					}
 				}
 
-				body, err = ioutil.ReadAll(resp.Body)
+				body, err = io.ReadAll(resp.Body)
 				if err != nil {
 					return fmt.Errorf("could not read the whole dist-git file: %v", err)
 				}
