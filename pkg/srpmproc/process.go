@@ -666,6 +666,11 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		if !pd.ModuleMode {
 			if status.IsClean() {
 				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				head, err := repo.Head()
+				if err != nil {
+					return nil, fmt.Errorf("error getting HEAD: %v", err)
+				}
+				latestHashForBranch[md.PushBranch] = head.Hash().String()
 				continue
 			}
 		}
@@ -1002,13 +1007,18 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 
 		err = w.AddWithOptions(&git.AddOptions{All: true})
 		if err != nil {
-			return nil, fmt.Errorf("Error adding SOURCES/ , SPECS/ or .metadata file to commit list.")
+			return nil, fmt.Errorf("error adding SOURCES/ , SPECS/ or .metadata file to commit list")
 		}
 
-		status, err := w.Status()
+		status, _ := w.Status()
 		if !pd.ModuleMode {
 			if status.IsClean() {
 				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				head, err := pushRepo.Head()
+				if err != nil {
+					return nil, fmt.Errorf("error getting HEAD: %v", err)
+				}
+				latestHashForBranch[md.PushBranch] = head.Hash().String()
 				continue
 			}
 		}
