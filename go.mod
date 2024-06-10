@@ -1,6 +1,8 @@
 module github.com/rocky-linux/srpmproc
 
-go 1.18
+go 1.21
+
+toolchain go1.21.8
 
 require (
 	cloud.google.com/go/storage v1.12.0
