@@ -32,6 +32,7 @@ import (
 
 var (
 	sourceRpm            string
+	sourceRpmGitName     string
 	sshKeyLocation       string
 	sshUser              string
 	upstreamPrefix       string
@@ -72,6 +73,7 @@ func mn(_ *cobra.Command, _ []string) {
 		Version:              version,
 		StorageAddr:          storageAddr,
 		Package:              sourceRpm,
+		PackageGitName:       sourceRpmGitName,
 		ModuleMode:           moduleMode,
 		TmpFsMode:            tmpFsMode,
 		ModulePrefix:         modulePrefix,
@@ -125,6 +127,7 @@ func main() {
 	root.Flags().StringVar(&storageAddr, "storage-addr", "", "Bucket to use as blob storage")
 	_ = root.MarkFlagRequired("storage-addr")
 
+	root.Flags().StringVar(&sourceRpmGitName, "source-rpm-git-name", "", "Actual git repo name of package if name is different from source-rpm value")
 	root.Flags().StringVar(&sshKeyLocation, "ssh-key-location", "", "Location of the SSH key to use to authenticate against upstream")
 	root.Flags().StringVar(&sshUser, "ssh-user", "git", "SSH User")
 	root.Flags().StringVar(&gitCommitterName, "git-committer-name", "rockyautomation", "Name of committer")

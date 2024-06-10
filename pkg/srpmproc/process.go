@@ -68,9 +68,10 @@ const (
 
 type ProcessDataRequest struct {
 	// Required
-	Version     int
-	StorageAddr string
-	Package     string
+	Version        int
+	StorageAddr    string
+	Package        string
+	PackageGitName string
 
 	// Optional
 	ModuleMode           bool
@@ -219,6 +220,11 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		return nil, fmt.Errorf("package cannot be empty")
 	}
 
+	// tells srpmproc what the source name actually is
+	if req.PackageGitName == "" {
+		req.PackageGitName = req.Package
+	}
+
 	var importer data.ImportMode
 	var blobStorage blob.Storage
 
@@ -238,9 +244,9 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 
 	sourceRpmLocation := ""
 	if req.ModuleMode {
-		sourceRpmLocation = fmt.Sprintf("%s/%s", req.ModulePrefix, req.Package)
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.ModulePrefix, req.PackageGitName)
 	} else {
-		sourceRpmLocation = fmt.Sprintf("%s/%s", req.RpmPrefix, req.Package)
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.RpmPrefix, req.PackageGitName)
 	}
 	importer = &modes.GitMode{}
 
