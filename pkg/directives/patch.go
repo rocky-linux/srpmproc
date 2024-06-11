@@ -55,7 +55,7 @@ func patch(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTre
 					return errors.New(fmt.Sprintf("COULD_NOT_OPEN_PATCH_SUBJECT:%s", srcPath))
 				}
 
-				err = gitdiff.NewApplier(patchSubjectFile).ApplyFile(&output, patchedFile)
+				err = gitdiff.Apply(&output, patchSubjectFile, patchedFile)
 				if err != nil {
 					pd.Log.Printf("could not apply patch: %v", err)
 					return errors.New(fmt.Sprintf("COULD_NOT_APPLY_PATCH_WITH_SUBJECT:%s", srcPath))
@@ -74,7 +74,7 @@ func patch(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTre
 				if err != nil {
 					return errors.New(fmt.Sprintf("COULD_NOT_CREATE_NEW_FILE:%s", srcPath))
 				}
-				err = gitdiff.NewApplier(newFile).ApplyFile(&output, patchedFile)
+				err = gitdiff.Apply(&output, newFile, patchedFile)
 				if err != nil {
 					return errors.New(fmt.Sprintf("COULD_NOT_APPLY_PATCH_TO_NEW_FILE:%s", srcPath))
 				}

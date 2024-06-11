@@ -25,7 +25,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -68,9 +67,10 @@ const (
 
 type ProcessDataRequest struct {
 	// Required
-	Version     int
-	StorageAddr string
-	Package     string
+	Version        int
+	StorageAddr    string
+	Package        string
+	PackageGitName string
 
 	// Optional
 	ModuleMode           bool
@@ -219,6 +219,11 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 		return nil, fmt.Errorf("package cannot be empty")
 	}
 
+	// tells srpmproc what the source name actually is
+	if req.PackageGitName == "" {
+		req.PackageGitName = req.Package
+	}
+
 	var importer data.ImportMode
 	var blobStorage blob.Storage
 
@@ -238,9 +243,9 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 
 	sourceRpmLocation := ""
 	if req.ModuleMode {
-		sourceRpmLocation = fmt.Sprintf("%s/%s", req.ModulePrefix, req.Package)
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.ModulePrefix, req.PackageGitName)
 	} else {
-		sourceRpmLocation = fmt.Sprintf("%s/%s", req.RpmPrefix, req.Package)
+		sourceRpmLocation = fmt.Sprintf("%s/%s", req.RpmPrefix, req.PackageGitName)
 	}
 	importer = &modes.GitMode{}
 
@@ -661,6 +666,11 @@ func ProcessRPM(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error) {
 		if !pd.ModuleMode {
 			if status.IsClean() {
 				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				head, err := repo.Head()
+				if err != nil {
+					return nil, fmt.Errorf("error getting HEAD: %v", err)
+				}
+				latestHashForBranch[md.PushBranch] = head.Hash().String()
 				continue
 			}
 		}
@@ -997,13 +1007,18 @@ func processRPMTagless(pd *data.ProcessData) (*srpmprocpb.ProcessResponse, error
 
 		err = w.AddWithOptions(&git.AddOptions{All: true})
 		if err != nil {
-			return nil, fmt.Errorf("Error adding SOURCES/ , SPECS/ or .metadata file to commit list.")
+			return nil, fmt.Errorf("error adding SOURCES/ , SPECS/ or .metadata file to commit list")
 		}
 
-		status, err := w.Status()
+		status, _ := w.Status()
 		if !pd.ModuleMode {
 			if status.IsClean() {
 				pd.Log.Printf("No changes detected. Our downstream is up to date.")
+				head, err := pushRepo.Head()
+				if err != nil {
+					return nil, fmt.Errorf("error getting HEAD: %v", err)
+				}
+				latestHashForBranch[md.PushBranch] = head.Hash().String()
 				continue
 			}
 		}
@@ -1124,7 +1139,7 @@ func convertLocalRepo(pkgName string, localRepo string) (bool, error) {
 	}
 
 	// Loop through each file/folder and operate accordingly:
-	files, err := ioutil.ReadDir(localRepo)
+	files, err := os.ReadDir(localRepo)
 	if err != nil {
 		return false, err
 	}
@@ -1233,7 +1248,7 @@ func getVersionFromSpec(localRepo string, majorVersion int) (string, error) {
 
 	// Read the first file from SPECS/ to get our spec file
 	// (there should only be one file - we check that it ends in ".spec" just to be sure!)
-	lsTmp, err := ioutil.ReadDir(fmt.Sprintf("%s/SPECS/", localRepo))
+	lsTmp, err := os.ReadDir(fmt.Sprintf("%s/SPECS/", localRepo))
 	if err != nil {
 		return "", err
 	}
