@@ -16,6 +16,7 @@ builds:
       - arm64
       - s390x
       - ppc64le
+      - riscv64
 archives:
   - name_template: >-
       {{- .ProjectName }}_
