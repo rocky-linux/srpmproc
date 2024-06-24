@@ -107,7 +107,7 @@ func sourcePatchOperationAfterLoop(req *sourcePatchOperationAfterLoopRequest) (b
 				*req.newLines = append(*req.newLines, fmt.Sprintf("%s:%s%s", field, spaces, file.Name))
 
 				if req.expectedField == "Patch" && file.AddToPrep {
-					val := fmt.Sprintf("%%patch%d", fieldNum)
+					val := fmt.Sprintf("%%patch -P%d", fieldNum)
 					if file.NPath > 0 {
 						val = fmt.Sprintf("%s -p%d", val, file.NPath)
 					}
