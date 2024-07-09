@@ -34,10 +34,12 @@ import (
 func patch(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTree *git.Worktree, pushTree *git.Worktree) error {
 	for _, patch := range cfg.Patch {
 		patchFile, err := patchTree.Filesystem.Open(patch.File)
+		pd.Log.Printf("[directives.patch] Parsing File: %s", patchFile.Name())
 		if err != nil {
 			return errors.New(fmt.Sprintf("COULD_NOT_OPEN_PATCH_FILE:%s", patch.File))
 		}
 		files, _, err := gitdiff.Parse(patchFile)
+
 		if err != nil {
 			pd.Log.Printf("could not parse patch file: %v", err)
 			return errors.New(fmt.Sprintf("COULD_NOT_PARSE_PATCH_FILE:%s", patch.File))
@@ -57,7 +59,7 @@ func patch(cfg *srpmprocpb.Cfg, pd *data.ProcessData, _ *data.ModeData, patchTre
 
 				err = gitdiff.Apply(&output, patchSubjectFile, patchedFile)
 				if err != nil {
-					pd.Log.Printf("could not apply patch: %v", err)
+					pd.Log.Printf("[directives.patch] could not apply patch: \"%v\" on \"%s\" from \"%s\"", err, srcPath, patchSubjectFile.Name())
 					return errors.New(fmt.Sprintf("COULD_NOT_APPLY_PATCH_WITH_SUBJECT:%s", srcPath))
 				}
 			}
