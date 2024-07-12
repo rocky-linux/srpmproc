@@ -21,11 +21,9 @@
 package srpmproc
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -87,11 +85,7 @@ func cfgPatches(pd *data.ProcessData, md *data.ModeData, patchTree *git.Worktree
 
 			errs := directives.Apply(&cfg, pd, md, patchTree, pushTree)
 			if errs != nil {
-				err := json.NewEncoder(os.Stdout).Encode(errs)
-				if err != nil {
-					return err
-				}
-
+				fmt.Printf("errors: %v\n", errs)
 				return fmt.Errorf("directives could not be applied")
 			}
 		}
