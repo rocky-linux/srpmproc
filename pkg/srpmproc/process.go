@@ -31,6 +31,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/go-git/go-billy/v5"
@@ -55,6 +56,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/rocky-linux/srpmproc/pkg/data"
+	"golang.org/x/term"
 )
 
 const (
@@ -79,6 +81,7 @@ type ProcessDataRequest struct {
 	RpmPrefix            string
 	SshKeyLocation       string
 	SshUser              string
+	SshKeyPassword       bool
 	HttpUsername         string
 	HttpPassword         string
 	ManualCommits        string
@@ -267,8 +270,20 @@ func NewProcessData(req *ProcessDataRequest) (*data.ProcessData, error) {
 			Password: req.HttpPassword,
 		}
 	} else {
+		var sshPassword string = ""
+		if req.SshKeyPassword {
+
+			fmt.Print("Enter SSH key password: ")
+			sshBytePassword, err := term.ReadPassword(int(syscall.Stdin))
+			if err != nil {
+				return nil, fmt.Errorf("could not read password for ssh key: %v", err)
+			}
+
+			sshPassword = string(sshBytePassword)
+		}
+
 		// create ssh key authenticator
-		authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, "")
+		authenticator, err = ssh.NewPublicKeysFromFile(req.SshUser, lastKeyLocation, sshPassword)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("could not get git authenticator: %v", err)

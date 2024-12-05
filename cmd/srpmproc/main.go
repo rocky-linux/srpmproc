@@ -35,6 +35,7 @@ var (
 	sourceRpmGitName     string
 	sshKeyLocation       string
 	sshUser              string
+	sshAskKeyPassword    bool
 	upstreamPrefix       string
 	version              int
 	storageAddr          string
@@ -80,6 +81,7 @@ func mn(_ *cobra.Command, _ []string) {
 		RpmPrefix:            rpmPrefix,
 		SshKeyLocation:       sshKeyLocation,
 		SshUser:              sshUser,
+		SshKeyPassword:       sshAskKeyPassword,
 		ManualCommits:        manualCommits,
 		UpstreamPrefix:       upstreamPrefix,
 		GitCommitterName:     gitCommitterName,
@@ -130,6 +132,7 @@ func main() {
 	root.Flags().StringVar(&sourceRpmGitName, "source-rpm-git-name", "", "Actual git repo name of package if name is different from source-rpm value")
 	root.Flags().StringVar(&sshKeyLocation, "ssh-key-location", "", "Location of the SSH key to use to authenticate against upstream")
 	root.Flags().StringVar(&sshUser, "ssh-user", "git", "SSH User")
+	root.Flags().BoolVar(&sshAskKeyPassword, "ssh-key-password", false, "If enabled, prompt for ssh key password")
 	root.Flags().StringVar(&gitCommitterName, "git-committer-name", "rockyautomation", "Name of committer")
 	root.Flags().StringVar(&gitCommitterEmail, "git-committer-email", "rockyautomation@rockylinux.org", "Email of committer")
 	root.Flags().StringVar(&modulePrefix, "module-prefix", "https://git.centos.org/modules", "Where to retrieve modules if exists. Only used when source-rpm is a git repo")
